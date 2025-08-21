@@ -50,7 +50,15 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         err = err.replace(TELEGRAM_TOKEN, "[TOKEN]")
     if OPENAI_API_KEY:
         err = err.replace(OPENAI_API_KEY, "[KEY]")
-    logging.exception("Unhandled exception: %s", err, exc_info=context.error)
+    # Sanitize stack trace as well
+    import traceback
+
+    tb = "".join(traceback.format_exception(type(context.error), context.error, context.error.__traceback__))
+    if TELEGRAM_TOKEN:
+        tb = tb.replace(TELEGRAM_TOKEN, "[TOKEN]")
+    if OPENAI_API_KEY:
+        tb = tb.replace(OPENAI_API_KEY, "[KEY]")
+    logging.error("Unhandled exception: %s\n%s", err, tb)
 
 def build_app():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()

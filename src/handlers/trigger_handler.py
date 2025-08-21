@@ -45,7 +45,7 @@ async def trigger_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if ALLOWED_CHAT_IDS and update.effective_chat.id not in ALLOWED_CHAT_IDS:
         return
     text = update.message.text or ""
-    if not text or text.startswith('.') or text.startswith('/'):
+    if not text:
         return
     for pattern, reply in _TRIGGER_PATTERNS:
         if pattern.search(text):
@@ -54,5 +54,8 @@ async def trigger_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 def get_handlers():
     return [
-        MessageHandler(filters.TEXT & (~filters.COMMAND), trigger_reply)
+        MessageHandler(
+            filters.TEXT & (~filters.Regex(r'^[./]')),
+            trigger_reply,
+        )
     ]

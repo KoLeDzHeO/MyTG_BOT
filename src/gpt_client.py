@@ -1,4 +1,4 @@
-"""Async wrapper around OpenAI Responses API."""
+"""Async wrapper around OpenAI Responses API with fallback."""
 
 import asyncio
 import logging
@@ -38,18 +38,43 @@ async def ask_gpt(
     model: str = OPENAI_MODEL,
     max_tokens: int = OPENAI_MAX_OUTPUT_TOKENS,
 ) -> str:
-    """Call OpenAI Responses API asynchronously and return plain text reply."""
+    """Call OpenAI Responses API asynchronously and return plain text reply.
+
+    The function first tries the ``Responses`` API and attempts to obtain the
+    text from ``output_text``.  If the field is missing or empty, it falls back
+    to ``resp.output[0].content[0].text``.  As a last resort the legacy chat
+    completions API is used.  The returned string is not stripped or otherwise
+    modified.
+    """
 
     client = _get_client()
 
     def _call() -> str:
+        # Try Responses API
         resp = client.responses.create(
             model=model,
             input=prompt,
             instructions=system,
             max_output_tokens=max_tokens,
         )
-        return (resp.output_text or "").strip()
+        text = resp.output_text or ""
+        if not text:
+            try:
+                text = resp.output[0].content[0].text or ""
+            except Exception:
+                text = ""
+        if not text:
+            # Fallback to Chat Completions
+            chat = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=max_tokens,
+            )
+            text = chat.choices[0].message.content or ""
+        return text
 
     # The SDK is synchronous, run it in a background thread to avoid blocking
     return await asyncio.to_thread(_call)
