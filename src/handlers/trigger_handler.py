@@ -33,6 +33,7 @@ def _load_triggers() -> None:
         pattern = re.compile(rf"\b{re.escape(phrase)}\b", flags=re.IGNORECASE)
         patterns.append((pattern, reply))
     _TRIGGER_PATTERNS = patterns
+    logging.info("Loaded %d triggers", len(_TRIGGER_PATTERNS))
 
 _load_triggers()
 

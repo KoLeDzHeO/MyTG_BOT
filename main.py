@@ -5,7 +5,10 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from src.config import TELEGRAM_TOKEN, ALLOWED_CHAT_IDS
 from src.handlers import get_handlers
 
+
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("telegram").setLevel(logging.WARNING)
 
 
 def allowed(chat_id: int) -> bool:
@@ -41,6 +44,12 @@ async def fake_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name = "Неустановленный элемент"
     await update.message.reply_text(f"🚫 {name} отправлен(а) в объятия модерации... шутка 😉")
 
+async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    err = str(context.error)
+    if TELEGRAM_TOKEN:
+        err = err.replace(TELEGRAM_TOKEN, "[TOKEN]")
+    logging.exception("Unhandled exception: %s", err, exc_info=context.error)
+
 def build_app():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
@@ -50,6 +59,7 @@ def build_app():
     app.add_handler(CommandHandler("ban", fake_ban))
     for h in get_handlers():
         app.add_handler(h)
+    app.add_error_handler(on_error)
     return app
 
 
