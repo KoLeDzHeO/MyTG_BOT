@@ -10,6 +10,11 @@ from ..config import (
     CONTEXT_TURNS,
     COOLDOWN_SECONDS,
     ALLOWED_CHAT_IDS,
+    OPENAI_MODEL,
+    OPENAI_MODEL_FULL,
+    OPENAI_MAX_OUTPUT_TOKENS,
+    OPENAI_MAX_OUTPUT_TOKENS_FULL,
+    OPENAI_API_KEY,
 )
 from ..utils.text_utils import split_message
 from ..gpt_client import ask_gpt
@@ -25,10 +30,35 @@ def _allowed(chat_id: int) -> bool:
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _allowed(update.effective_chat.id):
         return
-    text = ".<вопрос> — спросить GPT\n/coin — орёл/решка\n/8ball — магический шар\n/ban — фейк-бан"
+    text = (
+        "Начни сообщение с '.' — gpt-4o-mini, c '..' — gpt-4o (полный)\n"
+        ".<вопрос> — спросить GPT\n/coin — орёл/решка\n/8ball — магический шар\n/ban — фейк-бан"
+    )
     await update.message.reply_text(text)
 
-async def ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text or ""
+    model = max_tokens = None
+    cleaned = ""
+    if text.startswith(".."):
+        model = OPENAI_MODEL_FULL
+        max_tokens = OPENAI_MAX_OUTPUT_TOKENS_FULL
+        cleaned = text[2:]
+    elif text.startswith('.'):
+        model = OPENAI_MODEL
+        max_tokens = OPENAI_MAX_OUTPUT_TOKENS
+        cleaned = text[1:]
+    else:
+        return
+    update.message.text = cleaned.lstrip()
+    await ask(update, ctx, model, max_tokens)
+
+async def ask(
+    update: Update,
+    ctx: ContextTypes.DEFAULT_TYPE,
+    model: str,
+    max_tokens: int,
+):
     chat_id = update.effective_chat.id
     if not _allowed(chat_id):
         return
@@ -36,27 +66,31 @@ async def ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if now - _chat_cooldown[chat_id] < COOLDOWN_SECONDS:
         return  # антиспам
 
-    text = update.message.text or ""
-    if not text.startswith('.'):
-        return
-    user_q = text[1:].strip()
+    user_q = (update.message.text or "").strip()
     if not user_q:
         await update.message.reply_text("Напиши что-то после точки.")
         return
     if len(user_q) > MAX_PROMPT_CHARS:
         user_q = user_q[:MAX_PROMPT_CHARS]
 
-    history = "\n".join(list(_chat_context[chat_id]))
+    history = "\n".join(_chat_context[chat_id])
     prompt = (history + "\n" if history else "") + user_q
     if len(prompt) > MAX_PROMPT_CHARS:
-        prompt = prompt[-MAX_PROMPT_CHARS:]  # хвост диалога
+        prompt = prompt[-MAX_PROMPT_CHARS:]
 
+    log.info("model=%s input_len=%d max_tokens=%d", model, len(user_q), max_tokens)
     msg = await update.message.reply_text("Думаю… ⏳")
     try:
-        answer = ask_gpt(prompt)
+        answer = ask_gpt(prompt, model=model, max_tokens=max_tokens)
+        log.info("response_len=%d", len(answer))
     except Exception as e:
-        log.exception("OpenAI error")
-        answer = f"Упс. Ошибка запроса к модели: {e}"
+        err_msg = str(e)
+        if OPENAI_API_KEY:
+            err_msg = err_msg.replace(OPENAI_API_KEY, "[TOKEN]")
+        log.exception("OpenAI error: %s", err_msg)
+        await update.message.reply_text("⚠️ Произошла ошибка при обращении к GPT.")
+        await msg.delete()
+        return
 
     _chat_context[chat_id].append(f"Q: {user_q}")
     _chat_context[chat_id].append(f"A: {answer[:500]}")
@@ -70,5 +104,5 @@ async def ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 def get_handlers():
     return [
         CommandHandler("help", cmd_help),
-        MessageHandler(filters.TEXT & (~filters.COMMAND), ask),
+        MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message),
     ]
