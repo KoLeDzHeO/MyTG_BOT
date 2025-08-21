@@ -1,15 +1,15 @@
 import os
-from typing import Set, Dict, Any
+from typing import Set
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+USE_WEBHOOK = os.getenv("USE_WEBHOOK", "false").lower() in ("1", "true", "yes")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").rstrip("/")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+PORT = int(os.getenv("PORT", "8080"))
 
 
 def _csv_to_int_set(s: str) -> Set[int]:
     return {int(x) for x in s.split(",") if x.strip()} if s else set()
-
-
-def _mask(value: str | None) -> str:
-    if not value:
-        return ""
-    return value[:4] + "…" + value[-4:]
 
 
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
@@ -25,21 +25,22 @@ CONTEXT_TURNS = int(os.getenv("CONTEXT_TURNS", "5"))
 COOLDOWN_SECONDS = float(os.getenv("COOLDOWN_SECONDS", "3"))
 ALLOWED_CHAT_IDS = _csv_to_int_set(os.getenv("ALLOWED_CHAT_IDS", ""))
 
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
-
-def config_info() -> Dict[str, Any]:
-    """Return diagnostic information about configuration."""
-
+def config_info() -> dict:
     return {
         "OPENAI_MODEL": OPENAI_MODEL,
         "OPENAI_MODEL_FULL": OPENAI_MODEL_FULL,
         "OPENAI_MAX_OUTPUT_TOKENS": OPENAI_MAX_OUTPUT_TOKENS,
         "OPENAI_MAX_OUTPUT_TOKENS_FULL": OPENAI_MAX_OUTPUT_TOKENS_FULL,
+        "MAX_PROMPT_CHARS": MAX_PROMPT_CHARS,
+        "MAX_REPLY_CHARS": MAX_REPLY_CHARS,
         "CONTEXT_TURNS": CONTEXT_TURNS,
         "COOLDOWN_SECONDS": COOLDOWN_SECONDS,
-        "ALLOWED_CHAT_IDS": list(ALLOWED_CHAT_IDS),
-        "OPENAI_API_KEY": bool(OPENAI_API_KEY),
-        "TELEGRAM_TOKEN": _mask(TELEGRAM_TOKEN),
+        "ALLOWED_CHAT_IDS_COUNT": len(ALLOWED_CHAT_IDS),
         "LOG_LEVEL": LOG_LEVEL,
+        "USE_WEBHOOK": USE_WEBHOOK,
+        "WEBHOOK_URL_set": bool(WEBHOOK_URL),
+        "WEBHOOK_SECRET_set": bool(WEBHOOK_SECRET),
+        "PORT": PORT,
     }
+

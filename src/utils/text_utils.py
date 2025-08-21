@@ -1,19 +1,17 @@
-from typing import List
-
-
-def split_message(text: str, limit: int) -> List[str]:
-    if len(text) <= limit:
+def split_message(text: str, max_chars: int) -> list[str]:
+    """Split text into chunks under max_chars, prefer splitting on newlines."""
+    if len(text) <= max_chars:
         return [text]
-    parts: List[str] = []
-    remaining = text
-    while remaining:
-        if len(remaining) <= limit:
-            parts.append(remaining)
+    parts = []
+    while text:
+        if len(text) <= max_chars:
+            parts.append(text)
             break
-        chunk = remaining[:limit]
-        cut = max(chunk.rfind("\n"), chunk.rfind(" "))
-        if cut <= 0:
-            cut = limit  # жесткий фолбэк
-        parts.append(remaining[:cut].rstrip())
-        remaining = remaining[cut:].lstrip("\n ")
+        # ищем последнюю границу строки в лимите
+        cut = text.rfind("\n", 0, max_chars)
+        if cut == -1 or cut < max_chars // 2:
+            cut = max_chars
+        parts.append(text[:cut])
+        text = text[cut:].lstrip("\n")
     return parts
+
