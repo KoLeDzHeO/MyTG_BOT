@@ -13,6 +13,11 @@ log = logging.getLogger(__name__)
 
 _TRIGGER_PATTERNS: List[Tuple[re.Pattern[str], str]] = []
 
+
+def _allowed(chat_id: int) -> bool:
+    return (not ALLOWED_CHAT_IDS) or (chat_id in ALLOWED_CHAT_IDS)
+
+
 def _load_triggers() -> None:
     global _TRIGGER_PATTERNS
     cfg_path = Path(__file__).resolve().parent.parent / "config" / "triggers.json"
@@ -37,31 +42,28 @@ def _load_triggers() -> None:
     _TRIGGER_PATTERNS = patterns
     logging.info("Loaded %d triggers", len(_TRIGGER_PATTERNS))
 
+
 _load_triggers()
+
 
 async def trigger_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not _TRIGGER_PATTERNS:
         return
-    if ALLOWED_CHAT_IDS and update.effective_chat.id not in ALLOWED_CHAT_IDS:
+    if not _allowed(update.effective_chat.id):
         return
     text = update.message.text or ""
-    if not text:
+    if not text or text.startswith(".") or text.startswith("/"):
         return
     for pattern, reply in _TRIGGER_PATTERNS:
         if pattern.search(text):
             await update.message.reply_text(reply)
             break
 
+
 def get_handlers():
-    return [
-        MessageHandler(
-            filters.TEXT & (~filters.Regex(r'^[./]')),
-            trigger_reply,
-        )
-    ]
+    return [MessageHandler(filters.TEXT & (~filters.COMMAND), trigger_reply)]
 
 
-def triggers_info() -> int:
-    """Return number of loaded triggers."""
+def triggers_info() -> dict:
+    return {"count": len(_TRIGGER_PATTERNS)}
 
-    return len(_TRIGGER_PATTERNS)
