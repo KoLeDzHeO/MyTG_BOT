@@ -1,17 +1,12 @@
-def split_message(text: str, max_chars: int) -> list[str]:
-    """Split text into chunks under max_chars, prefer splitting on newlines."""
-    if len(text) <= max_chars:
-        return [text]
-    parts = []
-    while text:
-        if len(text) <= max_chars:
-            parts.append(text)
-            break
-        # ищем последнюю границу строки в лимите
-        cut = text.rfind("\n", 0, max_chars)
-        if cut == -1 or cut < max_chars // 2:
-            cut = max_chars
-        parts.append(text[:cut])
-        text = text[cut:].lstrip("\n")
-    return parts
+from src.config import config
 
+
+def chunk_text(text: str, size: int) -> list[str]:
+    return [text[i : i + size] for i in range(0, len(text), size)]
+
+
+def mask(text: str) -> str:
+    for secret in (config.TELEGRAM_TOKEN, config.OPENAI_API_KEY):
+        if secret:
+            text = text.replace(secret, "***")
+    return text
