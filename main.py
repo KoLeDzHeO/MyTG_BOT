@@ -3,7 +3,7 @@ import random
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from src.config import TELEGRAM_TOKEN, ALLOWED_CHAT_IDS
-from src.handlers import make_handlers
+from src.handlers.gpt_handler import get_handlers
 
 logging.basicConfig(level=logging.INFO)
 
@@ -48,7 +48,7 @@ def build_app():
     app.add_handler(CommandHandler("coin", coin))
     app.add_handler(CommandHandler("8ball", eightball))
     app.add_handler(CommandHandler("ban", fake_ban))
-    for h in make_handlers():
+    for h in get_handlers():
         app.add_handler(h)
     return app
 

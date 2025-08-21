@@ -9,7 +9,8 @@ OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_MAX_OUTPUT_TOKENS = int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "400"))
-MAX_REPLY_CHARS = int(os.getenv("MAX_REPLY_CHARS", "3800"))
+MAX_PROMPT_CHARS = int(os.getenv("MAX_PROMPT_CHARS", "4000"))
+MAX_REPLY_CHARS = int(os.getenv("MAX_REPLY_CHARS", "4000"))
 CONTEXT_TURNS = int(os.getenv("CONTEXT_TURNS", "3"))
 COOLDOWN_SECONDS = float(os.getenv("COOLDOWN_SECONDS", "3"))
 ALLOWED_CHAT_IDS = _csv_to_int_set(os.getenv("ALLOWED_CHAT_IDS", ""))
