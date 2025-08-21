@@ -2,7 +2,7 @@ import logging
 import random
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from src.config import TELEGRAM_TOKEN, ALLOWED_CHAT_IDS
+from src.config import TELEGRAM_TOKEN, ALLOWED_CHAT_IDS, OPENAI_API_KEY
 from src.handlers import get_handlers
 
 
@@ -48,6 +48,8 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     err = str(context.error)
     if TELEGRAM_TOKEN:
         err = err.replace(TELEGRAM_TOKEN, "[TOKEN]")
+    if OPENAI_API_KEY:
+        err = err.replace(OPENAI_API_KEY, "[KEY]")
     logging.exception("Unhandled exception: %s", err, exc_info=context.error)
 
 def build_app():
@@ -65,4 +67,6 @@ def build_app():
 
 if __name__ == "__main__":
     app = build_app()
+    # Если получаете ошибку "Conflict: terminated by other",
+    # убедитесь, что запущен только один инстанс бота.
     app.run_polling(drop_pending_updates=True)
