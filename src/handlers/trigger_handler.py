@@ -7,6 +7,8 @@ from typing import List, Tuple
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler, filters
 
+from ..config import ALLOWED_CHAT_IDS
+
 log = logging.getLogger(__name__)
 
 _TRIGGER_PATTERNS: List[Tuple[re.Pattern[str], str]] = []
@@ -40,8 +42,10 @@ _load_triggers()
 async def trigger_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not _TRIGGER_PATTERNS:
         return
+    if ALLOWED_CHAT_IDS and update.effective_chat.id not in ALLOWED_CHAT_IDS:
+        return
     text = update.message.text or ""
-    if not text or text.startswith('.'):
+    if not text or text.startswith('.') or text.startswith('/'):
         return
     for pattern, reply in _TRIGGER_PATTERNS:
         if pattern.search(text):
