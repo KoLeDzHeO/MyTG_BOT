@@ -1,12 +1,12 @@
-import os
+import logging
 import random
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from src.config import TELEGRAM_TOKEN, ALLOWED_CHAT_IDS
+from src.handlers import make_handlers
 
-TOKEN = os.environ["TELEGRAM_TOKEN"]
+logging.basicConfig(level=logging.INFO)
 
-# (опционально) ограничить бота одной группой:
-ALLOWED_CHAT_IDS = set()  # пример: {-1001234567890}
 
 def allowed(chat_id: int) -> bool:
     return not ALLOWED_CHAT_IDS or chat_id in ALLOWED_CHAT_IDS
@@ -14,15 +14,6 @@ def allowed(chat_id: int) -> bool:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not allowed(update.effective_chat.id): return
     await update.message.reply_text("Привет! Я ваш бот. Напиши /help")
-
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not allowed(update.effective_chat.id): return
-    await update.message.reply_text(
-        "/id — показать ID чата\n"
-        "/coin — орёл или решка\n"
-        "/8ball <вопрос> — мудрый ответ 🔮\n"
-        "/ban [@user|текст] — фейковый бан 😅"
-    )
 
 async def show_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not allowed(update.effective_chat.id): return
@@ -51,14 +42,16 @@ async def fake_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🚫 {name} отправлен(а) в объятия модерации... шутка 😉")
 
 def build_app():
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("id", show_id))
     app.add_handler(CommandHandler("coin", coin))
     app.add_handler(CommandHandler("8ball", eightball))
     app.add_handler(CommandHandler("ban", fake_ban))
+    for h in make_handlers():
+        app.add_handler(h)
     return app
+
 
 if __name__ == "__main__":
     app = build_app()
