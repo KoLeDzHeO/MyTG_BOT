@@ -41,26 +41,29 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _allowed(update.effective_chat.id):
         return
     text = update.message.text or ""
-    model = max_tokens = None
+    model = max_tokens = mode = None
     cleaned = ""
     if text.startswith(".."):
         model = OPENAI_MODEL_FULL
         max_tokens = OPENAI_MAX_OUTPUT_TOKENS_FULL
+        mode = "FULL"
         cleaned = text[2:]
     elif text.startswith('.'):
         model = OPENAI_MODEL
         max_tokens = OPENAI_MAX_OUTPUT_TOKENS
+        mode = "MINI"
         cleaned = text[1:]
     else:
         return
     update.message.text = cleaned.lstrip()
-    await ask(update, ctx, model, max_tokens)
+    await ask(update, ctx, model, max_tokens, mode)
 
 async def ask(
     update: Update,
     ctx: ContextTypes.DEFAULT_TYPE,
     model: str,
     max_tokens: int,
+    mode: str,
 ):
     chat_id = update.effective_chat.id
     if not _allowed(chat_id):
@@ -81,7 +84,7 @@ async def ask(
     if len(prompt) > MAX_PROMPT_CHARS:
         prompt = prompt[-MAX_PROMPT_CHARS:]
 
-    log.info("model=%s input_len=%d max_tokens=%d", model, len(user_q), max_tokens)
+    log.info("mode=%s input_len=%d max_tokens=%d", mode, len(user_q), max_tokens)
     msg = await update.message.reply_text("Думаю… ⏳")
     try:
         answer = await ask_gpt(prompt, model=model, max_tokens=max_tokens)
@@ -89,8 +92,9 @@ async def ask(
             await update.message.reply_text(
                 "⚠️ GPT вернул пустой ответ. Попробуй снова или переформулируй."
             )
+            log.warning("mode=%s empty_response", mode)
             return
-        log.info("response_len=%d", len(answer))
+        log.info("mode=%s response_len=%d", mode, len(answer))
         _chat_context[chat_id].append(f"Q: {user_q}")
         _chat_context[chat_id].append(f"A: {answer[:500]}")
         for chunk in split_message(answer, MAX_REPLY_CHARS):
@@ -104,6 +108,13 @@ async def ask(
     finally:
         _chat_cooldown[chat_id] = time.time()
         await msg.delete()
+
+
+def gpt_handler_info() -> dict[str, float]:
+    return {
+        "context_turns": CONTEXT_TURNS,
+        "cooldown_seconds": COOLDOWN_SECONDS,
+    }
 
 def get_handlers():
     return [

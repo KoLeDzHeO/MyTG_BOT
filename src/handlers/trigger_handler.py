@@ -59,3 +59,9 @@ def get_handlers():
             trigger_reply,
         )
     ]
+
+
+def triggers_info() -> int:
+    """Return number of loaded triggers."""
+
+    return len(_TRIGGER_PATTERNS)

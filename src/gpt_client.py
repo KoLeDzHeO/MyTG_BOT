@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import openai
 from openai import OpenAI
 
 from .config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_MAX_OUTPUT_TOKENS
@@ -78,4 +79,24 @@ async def ask_gpt(
 
     # The SDK is synchronous, run it in a background thread to avoid blocking
     return await asyncio.to_thread(_call)
+
+
+def client_diagnostics() -> dict[str, object]:
+    """Log and return diagnostic info about the OpenAI client."""
+
+    client = _get_client()
+    info = {
+        "sdk_version": openai.__version__,
+        "api_key": bool(OPENAI_API_KEY),
+        "responses_api": hasattr(client, "responses"),
+        "chat_completions_api": hasattr(getattr(client, "chat", None), "completions"),
+    }
+    log.info(
+        "OpenAI SDK %s key=%s responses=%s chat_completions=%s",
+        info["sdk_version"],
+        _mask(OPENAI_API_KEY),
+        info["responses_api"],
+        info["chat_completions_api"],
+    )
+    return info
 

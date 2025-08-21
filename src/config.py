@@ -1,8 +1,16 @@
 import os
-from typing import Set
+from typing import Set, Dict, Any
+
 
 def _csv_to_int_set(s: str) -> Set[int]:
     return {int(x) for x in s.split(",") if x.strip()} if s else set()
+
+
+def _mask(value: str | None) -> str:
+    if not value:
+        return ""
+    return value[:4] + "…" + value[-4:]
+
 
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -16,3 +24,22 @@ MAX_REPLY_CHARS = int(os.getenv("MAX_REPLY_CHARS", "3500"))
 CONTEXT_TURNS = int(os.getenv("CONTEXT_TURNS", "5"))
 COOLDOWN_SECONDS = float(os.getenv("COOLDOWN_SECONDS", "3"))
 ALLOWED_CHAT_IDS = _csv_to_int_set(os.getenv("ALLOWED_CHAT_IDS", ""))
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+
+def config_info() -> Dict[str, Any]:
+    """Return diagnostic information about configuration."""
+
+    return {
+        "OPENAI_MODEL": OPENAI_MODEL,
+        "OPENAI_MODEL_FULL": OPENAI_MODEL_FULL,
+        "OPENAI_MAX_OUTPUT_TOKENS": OPENAI_MAX_OUTPUT_TOKENS,
+        "OPENAI_MAX_OUTPUT_TOKENS_FULL": OPENAI_MAX_OUTPUT_TOKENS_FULL,
+        "CONTEXT_TURNS": CONTEXT_TURNS,
+        "COOLDOWN_SECONDS": COOLDOWN_SECONDS,
+        "ALLOWED_CHAT_IDS": list(ALLOWED_CHAT_IDS),
+        "OPENAI_API_KEY": bool(OPENAI_API_KEY),
+        "TELEGRAM_TOKEN": _mask(TELEGRAM_TOKEN),
+        "LOG_LEVEL": LOG_LEVEL,
+    }
