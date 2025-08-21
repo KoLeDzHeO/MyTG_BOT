@@ -3,7 +3,7 @@ import random
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from src.config import TELEGRAM_TOKEN, ALLOWED_CHAT_IDS
-from src.handlers.gpt_handler import get_handlers
+from src.handlers import get_handlers
 
 logging.basicConfig(level=logging.INFO)
 
