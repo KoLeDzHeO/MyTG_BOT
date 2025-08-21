@@ -33,32 +33,9 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     text = (
         "Использование GPT:\n"
         " .<вопрос> — быстрый ответ (gpt-4o-mini, до 400 токенов)\n"
-        " ..<вопрос> — подробный ответ (gpt-4o, до 600 токенов)\n"
-        " /ask <вопрос> — то же, что '.'; если текст начинается с '..', то полный режим\n"
-        "\nПрочее:\n"
-        " /coin — орёл/решка\n"
-        " /8ball — магический шар\n"
-        " /ban — фейк-бан"
+        " ..<вопрос> — подробный ответ (gpt-4o, до 600 токенов)"
     )
     await update.message.reply_text(text)
-
-
-async def cmd_ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Handle /ask command."""
-    if not _allowed(update.effective_chat.id):
-        return
-    text = " ".join(ctx.args).strip()
-    if not text:
-        await update.message.reply_text("Использование: /ask <вопрос>")
-        return
-    model = OPENAI_MODEL
-    max_tokens = OPENAI_MAX_OUTPUT_TOKENS
-    if text.startswith(".."):
-        model = OPENAI_MODEL_FULL
-        max_tokens = OPENAI_MAX_OUTPUT_TOKENS_FULL
-        text = text[2:].lstrip()
-    update.message.text = text
-    await ask(update, ctx, model, max_tokens)
 
 async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _allowed(update.effective_chat.id):
@@ -108,6 +85,11 @@ async def ask(
     msg = await update.message.reply_text("Думаю… ⏳")
     try:
         answer = await ask_gpt(prompt, model=model, max_tokens=max_tokens)
+        if not answer.strip():
+            await update.message.reply_text(
+                "⚠️ GPT вернул пустой ответ. Попробуй снова или переформулируй."
+            )
+            return
         log.info("response_len=%d", len(answer))
         _chat_context[chat_id].append(f"Q: {user_q}")
         _chat_context[chat_id].append(f"A: {answer[:500]}")
@@ -126,6 +108,8 @@ async def ask(
 def get_handlers():
     return [
         CommandHandler("help", cmd_help),
-        CommandHandler("ask", cmd_ask),
-        MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message),
+        MessageHandler(
+            filters.TEXT & (~filters.COMMAND) & filters.Regex(r'^\.'),
+            handle_message,
+        ),
     ]
