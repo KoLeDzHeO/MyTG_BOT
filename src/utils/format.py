@@ -2,6 +2,12 @@ import html
 
 
 def as_html(text: str) -> str:
-    """Escape text for safe HTML parse_mode and preserve line breaks."""
-    return html.escape(text).replace("\n", "<br>")
+    """
+    Экранируем текст для parse_mode="HTML".
+    Telegram НЕ поддерживает <br>, поэтому сохраняем переносы как '\n'.
+    """
+    if text is None:
+        return ""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return html.escape(text)
 
