@@ -4,6 +4,7 @@ import time
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.constants import ChatAction
+from telegram.error import BadRequest
 
 from src.config import config
 from src.gpt_client import ask_gpt
@@ -96,12 +97,32 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             return
 
         chunks = chunk_text(answer, config.MAX_REPLY_CHARS)
-        msg = await update.message.reply_text(as_html(chunks[0]), parse_mode="HTML")
+        if not chunks:
+            chunks = [answer or ""]  # страховка
+        try:
+            msg = await update.message.reply_text(as_html(chunks[0]), parse_mode="HTML")
+        except BadRequest:
+            msg = await update.message.reply_text(chunks[0])  # plain-text fallback
+        except Exception:
+            try:
+                msg = await update.message.reply_text(chunks[0])
+            except Exception:
+                msg = None
+
         for ch in chunks[1:]:
+            if msg is None:
+                # если первое сообщение не отправилось — сразу шлём новые чанки
+                await update.message.reply_text(ch)
+                continue
             try:
                 await msg.edit_text(as_html(ch), parse_mode="HTML")
+            except BadRequest:
+                await update.message.reply_text(ch)  # plain-text fallback
             except Exception:
-                await update.message.reply_text(as_html(ch), parse_mode="HTML")
+                try:
+                    await update.message.reply_text(ch)
+                except Exception:
+                    pass
         logging.info(
             "rid=%s done in=%.2fs answer_len=%d chunks=%d",
             rid,
