@@ -22,6 +22,10 @@ class Settings(BaseModel):
     # Behavior
     REQUIRE_PREFIX: bool = os.getenv("REQUIRE_PREFIX", "true").lower() in ("1", "true", "yes")
 
+    # Logging
+    LOG_CHAT_ID: int | None = int(os.getenv("LOG_CHAT_ID")) if os.getenv("LOG_CHAT_ID") else None
+    LOG_FORMAT: str = os.getenv("LOG_FORMAT", "plain")  # plain|json
+
     # Budget / abuse protection
     RATE_LIMIT_PER_CHAT: int = int(os.getenv("RATE_LIMIT_PER_CHAT", 5))   # N запросов
     RATE_LIMIT_INTERVAL: int = int(os.getenv("RATE_LIMIT_INTERVAL", 60))  # окно секунд
