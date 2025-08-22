@@ -29,7 +29,7 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
     query = query.strip()[: config.MAX_PROMPT_CHARS]
     thinking = await update.message.reply_text("Думаю…")
-    answer = await ask_gpt(model, query, max_tokens)
+    answer = await ask_gpt(query, model=model, max_tokens=max_tokens)
     logging.info("model=%s in_len=%d out_len=%d", model, len(query), len(answer))
     if not answer.strip():
         parts = ["⚠️ GPT вернул пустой ответ."]
