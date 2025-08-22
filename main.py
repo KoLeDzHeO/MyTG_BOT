@@ -6,6 +6,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from src.config import config
 from src.handlers.gpt_handler import gpt_handler, id_handler, start_handler
+from src.utils.text_utils import mask
 
 
 def _make_logger():
@@ -38,7 +39,7 @@ def _make_logger():
 
 async def on_error(update, context):
     rid = str(uuid.uuid4())[:8]
-    logging.exception("Unhandled error [%s]: %s", rid, context.error)
+    logging.exception("Unhandled error [%s]: %s", rid, mask(str(context.error)))
     try:
         if update and getattr(update, "effective_chat", None):
             await context.bot.send_message(
@@ -46,7 +47,7 @@ async def on_error(update, context):
             )
         if config.LOG_CHAT_ID:
             await context.bot.send_message(
-                config.LOG_CHAT_ID, f"❌ Error {rid}: {context.error}"
+                config.LOG_CHAT_ID, f"❌ Error {rid}: {mask(str(context.error))}"
             )
     except Exception:
         pass

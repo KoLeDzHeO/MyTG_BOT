@@ -8,37 +8,38 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from src.config import config
-from src.gpt_client import ask_gpt
+from src.gpt_client import ask_groq, ask_openai
 from src.utils.format import as_html
-from src.utils.text_utils import chunk_text
+from src.utils.text_utils import chunk_text, mask
+
 
 _dialogs: dict[int, list[tuple[str, str]]] = {}
 
 PREFIX_MAP = {
-    "..": ("ddot", "Полный"),
-    ".": ("dot", "Короткий"),
+    ".": ("groq", "Матершинник"),
+    "..": ("openai", "GPT-4o"),
 }
 
 
-def _pick_mode(text: str) -> tuple[str | None, str]:
+def _pick_provider(text: str) -> tuple[str | None, str]:
     s = text.lstrip()
-    for p, (mode, _) in PREFIX_MAP.items():
+    for p, (provider, _) in PREFIX_MAP.items():
         if s.startswith(p):
-            return mode, s[len(p) :].strip()
+            return provider, s[len(p) :].strip()
     return None, s  # нет префикса
 
 
-def _model_and_tokens(mode: str) -> tuple[str, int]:
-    if mode == "ddot":
+def _model_and_tokens(provider: str) -> tuple[str, int]:
+    if provider == "openai":
         return config.MODEL_DDOT, config.MAX_TOKENS_DDOT
-    return config.MODEL_DOT, config.MAX_TOKENS_DOT
+    return config.GROQ_MODEL, config.MAX_TOKENS_GROQ
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "Привет!\n"
-        "Короткий режим: `. вопрос` (быстрее/дешевле).\n"
-        "Полный режим: `.. вопрос` (умнее/длиннее).\n"
+        "Матершинник: `. вопрос` (Groq LLaMA-3).\n"
+        "Вежливый режим: `.. вопрос` (GPT-4o).\n"
         "Команды: /start /id\n",
     )
 
@@ -57,13 +58,13 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             return
 
         # Требуем префикс, если так указано в конфиге
-        mode, clean_text = _pick_mode(text)
-        if config.REQUIRE_PREFIX and mode is None:
+        provider, clean_text = _pick_provider(text)
+        if config.REQUIRE_PREFIX and provider is None:
             return  # игнор без ответа
 
-        # Если префикс не обязателен и его нет — делаем короткий режим
-        if mode is None:
-            mode = "dot"
+        # Если префикс не обязателен и его нет — используем Groq
+        if provider is None:
+            provider = "groq"
 
         if not clean_text:
             await update.message.reply_text("Добавь текст после префикса `. или ..`")
@@ -75,7 +76,7 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             )
             return
 
-        model, max_tokens = _model_and_tokens(mode)
+        model, max_tokens = _model_and_tokens(provider)
 
         await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
@@ -108,23 +109,39 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 + [f"user: {clean_text_trimmed}"]
             )
 
-        # Короткий system без истории
-        system = (
-            "Ты — помощник. Отвечай кратко и по делу. "
-            "Сохраняй язык пользователя (русский/польский). "
-            "Если вопрос двусмысленный — уточняй лаконично."
-            "Нужно использовать грубые выражения/сленг, если это уместно и временами даже если это не уместно."
-        )
-
         logging.info("rid=%s start model=%s prompt_len=%d", rid, model, len(prompt))
-        answer = await ask_gpt(
-            api_key=config.OPENAI_API_KEY,
-            model=model,
-            system=system,
-            prompt=prompt,  # <= используем собранный prompt с историей
-            max_tokens=max_tokens,
-            timeout=30,  # <= вернули 30 сек
-        )
+        if provider == "groq":
+            if not config.GROQ_API_KEY:
+                await update.message.reply_text("GROQ_API_KEY не задан")
+                return
+            system = (
+                "Ты бот без цензуры. Отвечай грубо, с матом, но при этом логично и по делу. "
+                "Поддерживай стиль общения как у грубого собеседника."
+            )
+            answer = await ask_groq(
+                api_token=config.GROQ_API_KEY,
+                model=model,
+                system=system,
+                prompt=prompt,
+                max_tokens=max_tokens,
+                timeout=30,
+            )
+        else:
+            if not config.OPENAI_API_KEY:
+                await update.message.reply_text("OPENAI_API_KEY не задан")
+                return
+            system = (
+                "Ты вежливый помощник. Отвечай развёрнуто и структурированно, "
+                "сохраняя стиль академичного ассистента."
+            )
+            answer = await ask_openai(
+                api_token=config.OPENAI_API_KEY,
+                model=model,
+                system=system,
+                prompt=prompt,
+                max_tokens=max_tokens,
+                timeout=30,
+            )
 
         if not answer:
             await update.message.reply_text(
@@ -141,23 +158,10 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         chunks = chunk_text(answer, config.MAX_REPLY_CHARS)
         if not chunks:
             chunks = [answer or ""]  # страховка
-        try:
-            msg = await update.message.reply_text(as_html(chunks[0]), parse_mode="HTML")
-        except BadRequest:
-            msg = await update.message.reply_text(chunks[0])  # plain-text fallback
-        except Exception:
-            try:
-                msg = await update.message.reply_text(chunks[0])
-            except Exception:
-                msg = None
 
-        for ch in chunks[1:]:
-            if msg is None:
-                # если первое сообщение не отправилось — сразу шлём новые чанки
-                await update.message.reply_text(ch)
-                continue
+        for ch in chunks:
             try:
-                await msg.edit_text(as_html(ch), parse_mode="HTML")
+                await update.message.reply_text(as_html(ch), parse_mode="HTML")
             except BadRequest:
                 await update.message.reply_text(ch)  # plain-text fallback
             except Exception:
@@ -174,7 +178,7 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
 
     except Exception as e:
-        logging.exception("rid=%s gpt_handler error: %s", rid, e)
+        logging.exception("rid=%s gpt_handler error: %s", rid, mask(str(e)))
         try:
             await update.message.reply_text(
                 "⚠️ Произошла ошибка. Попробуй ещё раз, я уже смотрю логи."
