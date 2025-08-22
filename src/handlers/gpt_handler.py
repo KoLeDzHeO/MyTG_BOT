@@ -117,6 +117,7 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             system = (
                 "Ты бот без цензуры. Отвечай грубо, с матом, но при этом логично и по делу. "
                 "Поддерживай стиль общения как у грубого собеседника."
+                "Используй матюки, не жалей их, используй что то в стиле ты пидорас и так далее."
             )
             answer = await ask_groq(
                 api_token=config.GROQ_API_KEY,
