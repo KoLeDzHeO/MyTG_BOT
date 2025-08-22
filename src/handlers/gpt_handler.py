@@ -113,6 +113,7 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             "Ты — помощник. Отвечай кратко и по делу. "
             "Сохраняй язык пользователя (русский/польский). "
             "Если вопрос двусмысленный — уточняй лаконично."
+            "Нужно использовать грубые выражения/сленг, если это уместно и временами даже если это не уместно."
         )
 
         logging.info("rid=%s start model=%s prompt_len=%d", rid, model, len(prompt))
