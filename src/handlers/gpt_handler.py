@@ -1,4 +1,6 @@
 import logging
+import uuid
+import time
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.constants import ChatAction
@@ -40,6 +42,8 @@ async def id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await update.message.reply_text(str(update.effective_chat.id))
 
 async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    rid = str(uuid.uuid4())[:8]
+    t0 = time.time()
     try:
         chat_id = update.effective_chat.id
         text = (update.message.text or "").strip()
@@ -77,6 +81,7 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             "Если вопрос двусмысленный — уточняй лаконично."
         )
 
+        logging.info("rid=%s start model=%s prompt_len=%d", rid, model, len(clean_text))
         answer = await ask_gpt(
             api_key=config.OPENAI_API_KEY,
             model=model,
@@ -97,9 +102,16 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 await msg.edit_text(as_html(ch), parse_mode="HTML")
             except Exception:
                 await update.message.reply_text(as_html(ch), parse_mode="HTML")
+        logging.info(
+            "rid=%s done in=%.2fs answer_len=%d chunks=%d",
+            rid,
+            time.time() - t0,
+            len(answer),
+            len(chunks),
+        )
 
     except Exception as e:
-        logging.exception("gpt_handler error: %s", e)
+        logging.exception("rid=%s gpt_handler error: %s", rid, e)
         try:
             await update.message.reply_text("⚠️ Произошла ошибка. Попробуй ещё раз, я уже смотрю логи.")
         except Exception:
