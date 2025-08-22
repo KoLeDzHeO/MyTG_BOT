@@ -1,5 +1,6 @@
 import asyncio
 import logging
+
 from openai import OpenAI
 
 from src.utils.text_utils import mask

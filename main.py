@@ -1,15 +1,16 @@
+import json
 import logging
 import uuid
-import json
+
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from src.config import config
 from src.handlers.gpt_handler import gpt_handler, id_handler, start_handler
-from src.utils.text_utils import mask
 
 
 def _make_logger():
     if config.LOG_FORMAT == "json":
+
         class JsonFormatter(logging.Formatter):
             def format(self, record):
                 log_record = {
@@ -21,6 +22,7 @@ def _make_logger():
                 if record.exc_info:
                     log_record["exc_info"] = self.formatException(record.exc_info)
                 return json.dumps(log_record, ensure_ascii=False)
+
         handler = logging.StreamHandler()
         handler.setFormatter(JsonFormatter())
         root = logging.getLogger()
@@ -39,9 +41,13 @@ async def on_error(update, context):
     logging.exception("Unhandled error [%s]: %s", rid, context.error)
     try:
         if update and getattr(update, "effective_chat", None):
-            await context.bot.send_message(update.effective_chat.id, f"⚠️ Ошибка (id={rid}). Попробуй ещё раз.")
+            await context.bot.send_message(
+                update.effective_chat.id, f"⚠️ Ошибка (id={rid}). Попробуй ещё раз."
+            )
         if config.LOG_CHAT_ID:
-            await context.bot.send_message(config.LOG_CHAT_ID, f"❌ Error {rid}: {context.error}")
+            await context.bot.send_message(
+                config.LOG_CHAT_ID, f"❌ Error {rid}: {context.error}"
+            )
     except Exception:
         pass
 
@@ -63,4 +69,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
