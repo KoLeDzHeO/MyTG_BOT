@@ -34,6 +34,7 @@ class Settings(BaseModel):
 
     # Behavior
     REQUIRE_PREFIX: bool = os.getenv("REQUIRE_PREFIX", "true").lower() in ("1", "true", "yes")
+    DIALOG_HISTORY_LEN: int = int(os.getenv("DIALOG_HISTORY_LEN", 5))
 
     # Logging
     LOG_CHAT_ID: int | None = int(os.getenv("LOG_CHAT_ID")) if os.getenv("LOG_CHAT_ID") else None
@@ -52,6 +53,7 @@ try:
     assert config.RATE_LIMIT_INTERVAL > 0
     assert config.MAX_PROMPT_CHARS > 0
     assert 1000 <= config.MAX_REPLY_CHARS <= 4000  # телега ~4096, оставляем запас под HTML
+    assert config.DIALOG_HISTORY_LEN > 0
 except (ValidationError, AssertionError) as e:
     missing = []
     if not _raw_telegram:

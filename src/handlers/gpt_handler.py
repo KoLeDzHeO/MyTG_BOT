@@ -13,6 +13,7 @@ from src.utils.ratelimit import WindowRateLimiter
 from src.utils.format import as_html
 
 _rate_limiter = WindowRateLimiter(config.RATE_LIMIT_PER_CHAT, config.RATE_LIMIT_INTERVAL)
+_dialogs: dict[int, list[tuple[str, str]]] = {}
 
 PREFIX_MAP = {
     "..": ("ddot", "Полный"),
@@ -76,18 +77,48 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
+        # --- История в prompt, без дублирования ---
+        history = _dialogs.get(chat_id, [])
+        # последние N пар (role, content)
+        hist_pairs = history[-config.DIALOG_HISTORY_LEN:]
+
+        # Представляем историю как "role: content"
+        def _build_prompt(pairs: list[tuple[str, str]]) -> str:
+            msgs = [f"{role}: {content}" for role, content in pairs]
+            msgs.append(f"user: {clean_text}")
+            return "\n".join(msgs)
+
+        prompt = _build_prompt(hist_pairs)
+
+        # Обрезаем самую старую историю, если слишком длинно по символам
+        while len(prompt) > config.MAX_PROMPT_CHARS and hist_pairs:
+            hist_pairs = hist_pairs[1:]  # выбрасываем старую реплику
+            prompt = _build_prompt(hist_pairs)
+
+        # Если даже без истории слишком длинно — подрежем текущий вопрос
+        if len(prompt) > config.MAX_PROMPT_CHARS:
+            overflow = len(prompt) - config.MAX_PROMPT_CHARS
+            clean_text_trimmed = (
+                clean_text[:-overflow] if overflow < len(clean_text) else clean_text[:1]
+            )
+            prompt = "\n".join(
+                [f"{role}: {content}" for role, content in hist_pairs]
+                + [f"user: {clean_text_trimmed}"]
+            )
+
+        # Короткий system без истории
         system = (
-            "Отвечай кратко и по делу. "
+            "Ты — помощник. Отвечай кратко и по делу. "
             "Сохраняй язык пользователя (русский/польский). "
             "Если вопрос двусмысленный — уточняй лаконично."
         )
 
-        logging.info("rid=%s start model=%s prompt_len=%d", rid, model, len(clean_text))
+        logging.info("rid=%s start model=%s prompt_len=%d", rid, model, len(prompt))
         answer = await ask_gpt(
             api_key=config.OPENAI_API_KEY,
             model=model,
             system=system,
-            prompt=clean_text,
+            prompt=prompt,          # <= используем собранный prompt с историей
             max_tokens=max_tokens,
             timeout=30,  # <= вернули 30 сек
         )
@@ -95,6 +126,12 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if not answer:
             await update.message.reply_text("Сервис занят или тишина от модели. Попробуй ещё раз позже.")
             return
+
+        _dialogs.setdefault(chat_id, []).append(("user", clean_text))
+        _dialogs[chat_id].append(("assistant", answer))
+        # держим не более N пар (user/assistant) * 1:1
+        if len(_dialogs[chat_id]) > config.DIALOG_HISTORY_LEN * 2:
+            _dialogs[chat_id] = _dialogs[chat_id][-config.DIALOG_HISTORY_LEN * 2:]
 
         chunks = chunk_text(answer, config.MAX_REPLY_CHARS)
         if not chunks:
