@@ -8,27 +8,6 @@ from src.handlers.gpt_handler import gpt_handler, id_handler, start_handler
 from src.utils.text_utils import mask
 
 
-async def _post_init(app: Application) -> None:
-    logging.info("delete webhook")
-    try:
-        await app.bot.delete_webhook(drop_pending_updates=True)
-    except Exception as e:
-        logging.warning("webhook clear err %s", mask(str(e)))
-    app.bot_data["webhook_ok"] = False
-    if config.WEBHOOK_URL and config.WEBHOOK_SECRET:
-        try:
-            url = f"{config.WEBHOOK_URL.rstrip('/')}/{config.WEBHOOK_SECRET}"
-            await app.bot.set_webhook(
-                url=url,
-                secret_token=config.WEBHOOK_SECRET,
-                drop_pending_updates=True,
-            )
-            app.bot_data["webhook_ok"] = True
-            logging.info("webhook set ok")
-        except Exception as e:
-            logging.error("webhook set err %s", mask(str(e)))
-
-
 def _make_logger():
     if config.LOG_FORMAT == "json":
         class JsonFormatter(logging.Formatter):
@@ -69,7 +48,7 @@ async def on_error(update, context):
 
 def main() -> None:
     _make_logger()
-    app = Application.builder().token(config.TELEGRAM_TOKEN).post_init(_post_init).build()
+    app = Application.builder().token(config.TELEGRAM_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("id", id_handler))
@@ -77,21 +56,9 @@ def main() -> None:
 
     app.add_error_handler(on_error)
 
-    logging.info("config ok: webhook=%s require_prefix=%s", 
-                 bool(config.WEBHOOK_URL and config.WEBHOOK_SECRET), config.REQUIRE_PREFIX)
-
-    if config.WEBHOOK_URL and config.WEBHOOK_SECRET and app.bot_data.get("webhook_ok") is True:
-        logging.info("webhook mode")
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=config.PORT,
-            url_path=config.WEBHOOK_SECRET,
-            secret_token=config.WEBHOOK_SECRET,
-            drop_pending_updates=True,
-        )
-    else:
-        logging.info("polling")
-        app.run_polling(drop_pending_updates=True)
+    logging.info("config ok: webhook=False require_prefix=%s", config.REQUIRE_PREFIX)
+    logging.info("polling")
+    app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
