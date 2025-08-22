@@ -18,12 +18,14 @@ def _first_nonempty(*names: str) -> str | None:
 # Критичные ключи читаем ДО инициализации pydantic-модели
 _raw_telegram = _first_nonempty("TELEGRAM_TOKEN", "BOT_TOKEN", "TELEGRAM_BOT_TOKEN")
 _raw_openai = _first_nonempty("OPENAI_API_KEY", "OPENAI_KEY")
+_raw_groq = _first_nonempty("GROQ_API_KEY", "GROQ_KEY")
 
 
 class Settings(BaseModel):
     # ВАЖНО: подставь значения env прямо в Field(...)
     TELEGRAM_TOKEN: str = Field(_raw_telegram or ..., min_length=10)
-    OPENAI_API_KEY: str = Field(_raw_openai or ..., min_length=10)
+    OPENAI_API_KEY: str | None = Field(_raw_openai, min_length=10)
+    GROQ_API_KEY: str | None = Field(_raw_groq, min_length=10)
 
     # Network / webhook
     PORT: int = int(os.getenv("PORT", 8080))
@@ -33,6 +35,8 @@ class Settings(BaseModel):
     # Models / limits
     MODEL_DOT: str = os.getenv("MODEL_DOT", "gpt-4o-mini")
     MODEL_DDOT: str = os.getenv("MODEL_DDOT", "gpt-4o")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    MAX_TOKENS_GROQ: int = int(os.getenv("MAX_TOKENS_GROQ", 400))
     MAX_TOKENS_DOT: int = int(os.getenv("MAX_TOKENS_DOT", 400))
     MAX_TOKENS_DDOT: int = int(os.getenv("MAX_TOKENS_DDOT", 600))
 
@@ -67,8 +71,6 @@ except (ValidationError, AssertionError) as e:
     missing = []
     if not _raw_telegram:
         missing.append("TELEGRAM_TOKEN (или BOT_TOKEN/TELEGRAM_BOT_TOKEN)")
-    if not _raw_openai:
-        missing.append("OPENAI_API_KEY (или OPENAI_KEY)")
     if missing:
         print("❌ Отсутствуют переменные окружения:", ", ".join(missing))
         print("   • Railway: Settings → Variables (значения БЕЗ кавычек).")

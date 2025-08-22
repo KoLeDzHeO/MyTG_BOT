@@ -2,3 +2,4 @@ python-telegram-bot==21.4
 openai>=1.100.0,<2
 python-dotenv>=1.0.1
 pydantic>=2.8
+requests>=2.31
