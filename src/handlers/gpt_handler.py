@@ -60,9 +60,7 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         provider, clean_text = _pick_provider(raw)
         if config.REQUIRE_PREFIX and provider is None:
-            await update.message.reply_html(
-                "Добавь префикс: <b>.</b> — дерзкий (Groq), <b>..</b> — вежливый (OpenAI)."
-            )
+            # В режиме REQUIRE_PREFIX=true бот полностью молчит на сообщения без префикса
             return
 
         if provider is None:
