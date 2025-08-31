@@ -1,9 +1,10 @@
 import logging
 import time
 import uuid
+import re
 
 from telegram import Update
-from telegram.constants import ChatAction
+from telegram.constants import ChatAction, ChatType
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
@@ -28,6 +29,18 @@ def _pick_provider(text: str) -> tuple[str | None, str]:
         if s.startswith(p):
             return provider, s[len(p) :].strip()
     return None, s.strip()  # нет префикса
+
+
+def _is_mention_addressed(raw: str, bot_username: str | None) -> tuple[bool, str]:
+    """True, remainder if message starts with @botusername (case-insensitive)."""
+    if not bot_username:
+        return False, raw
+    s = raw.lstrip()
+    pattern = rf"^@{re.escape(bot_username.lower())}\s*[:,]?\s*"
+    m = re.match(pattern, s, flags=re.IGNORECASE)
+    if m:
+        return True, s[m.end():].lstrip()
+    return False, raw
 
 
 def _model_and_tokens(provider: str) -> tuple[str, int]:
@@ -59,15 +72,27 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             return
 
         provider, clean_text = _pick_provider(raw)
-        if config.REQUIRE_PREFIX and provider is None:
-            # В режиме REQUIRE_PREFIX=true бот полностью молчит на сообщения без префикса
+        chat_type = update.effective_chat.type
+
+        # В группах/супергруппах: нужен префикс или упоминание
+        if chat_type in {ChatType.GROUP, ChatType.SUPERGROUP} and provider is None:
+            addressed, remainder = _is_mention_addressed(
+                raw, getattr(context.bot, "username", None)
+            )
+            if not addressed:
+                return  # молчим
+            clean_text = remainder
+
+        # В личке: если требуем префикс и его нет — молчим
+        if chat_type == ChatType.PRIVATE and config.REQUIRE_PREFIX and provider is None:
             return
 
+        # Фоллбэк провайдера (после всех «молчаливых» проверок)
         if provider is None:
             default_provider = (config.DEFAULT_PROVIDER or "groq").strip().lower()
-            if default_provider not in {"groq", "openai"}:
-                default_provider = "groq"
-            provider = default_provider
+            provider = (
+                default_provider if default_provider in {"groq", "openai"} else "groq"
+            )
 
         if not clean_text:
             await update.message.reply_text("Добавь текст после префикса `. или ..`")
