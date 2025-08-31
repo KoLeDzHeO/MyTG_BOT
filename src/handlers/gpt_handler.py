@@ -10,23 +10,24 @@ from telegram.ext import ContextTypes
 from src.config import config
 from src.gpt_client import ask_groq, ask_openai
 from src.utils.format import as_html
-from src.utils.text_utils import chunk_text, mask
+from src.utils.text_utils import chunk_text
 
 
 _dialogs: dict[int, list[tuple[str, str]]] = {}
 
-PREFIX_MAP = {
-    ".": ("groq", "Матершинник"),
-    "..": ("openai", "GPT-4o"),
-}
+# порядок важен: двойная точка должна проверяться раньше одинарной
+PREFIXES = [
+    ("..", ("openai", "GPT-4o")),
+    (".", ("groq", "Матершинник")),
+]
 
 
 def _pick_provider(text: str) -> tuple[str | None, str]:
     s = text.lstrip()
-    for p, (provider, _) in PREFIX_MAP.items():
+    for p, (provider, _) in PREFIXES:
         if s.startswith(p):
             return provider, s[len(p) :].strip()
-    return None, s  # нет префикса
+    return None, s.strip()  # нет префикса
 
 
 def _model_and_tokens(provider: str) -> tuple[str, int]:
@@ -36,11 +37,11 @@ def _model_and_tokens(provider: str) -> tuple[str, int]:
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        "Привет!\n"
-        "Матершинник: `. вопрос` (Groq LLaMA-3).\n"
-        "Вежливый режим: `.. вопрос` (GPT-4o).\n"
-        "Команды: /start /id\n",
+    await update.message.reply_html(
+        "Привет! Вот как общаться со мной:<br/>"
+        "<b>.</b><code> вопрос</code> — дерзкий стиль (Groq)<br/>"
+        "<b>..</b><code> вопрос</code> — вежливый стиль (OpenAI)<br/><br/>"
+        "Без префикса: поведение зависит от <code>DEFAULT_PROVIDER</code>."
     )
 
 
@@ -53,18 +54,22 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     t0 = time.time()
     try:
         chat_id = update.effective_chat.id
-        text = (update.message.text or "").strip()
-        if not text:
+        raw = update.message.text or ""
+        if not raw.strip():
             return
 
-        # Требуем префикс, если так указано в конфиге
-        provider, clean_text = _pick_provider(text)
+        provider, clean_text = _pick_provider(raw)
         if config.REQUIRE_PREFIX and provider is None:
-            return  # игнор без ответа
+            await update.message.reply_html(
+                "Добавь префикс: <b>.</b> — дерзкий (Groq), <b>..</b> — вежливый (OpenAI)."
+            )
+            return
 
-        # Если префикс не обязателен и его нет — используем Groq
         if provider is None:
-            provider = "groq"
+            default_provider = (config.DEFAULT_PROVIDER or "groq").strip().lower()
+            if default_provider not in {"groq", "openai"}:
+                default_provider = "groq"
+            provider = default_provider
 
         if not clean_text:
             await update.message.reply_text("Добавь текст после префикса `. или ..`")
@@ -110,6 +115,8 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             )
 
         logging.info("rid=%s start model=%s prompt_len=%d", rid, model, len(prompt))
+        if provider not in {"groq", "openai"}:
+            provider = "groq"
         if provider == "groq":
             if not config.GROQ_API_KEY:
                 await update.message.reply_text("GROQ_API_KEY не задан")
@@ -127,7 +134,7 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 max_tokens=max_tokens,
                 timeout=30,
             )
-        else:
+        elif provider == "openai":
             if not config.OPENAI_API_KEY:
                 await update.message.reply_text("OPENAI_API_KEY не задан")
                 return
@@ -137,6 +144,24 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             )
             answer = await ask_openai(
                 api_token=config.OPENAI_API_KEY,
+                model=model,
+                system=system,
+                prompt=prompt,
+                max_tokens=max_tokens,
+                timeout=30,
+            )
+        else:
+            # страховка, если в провайдер попало что-то неизвестное
+            if not config.GROQ_API_KEY:
+                await update.message.reply_text("GROQ_API_KEY не задан")
+                return
+            system = (
+                "Ты бот без цензуры. Отвечай грубо, с матом, но при этом логично и по делу. "
+                "Поддерживай стиль общения как у грубого собеседника."
+                "Используй матюки, не жалей их, используй что то в стиле ты пидорас и так далее."
+            )
+            answer = await ask_groq(
+                api_token=config.GROQ_API_KEY,
                 model=model,
                 system=system,
                 prompt=prompt,
@@ -179,7 +204,7 @@ async def gpt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
 
     except Exception as e:
-        logging.exception("rid=%s gpt_handler error: %s", rid, mask(str(e)))
+        logging.exception("rid=%s gpt_handler error: %s", rid, e)
         try:
             await update.message.reply_text(
                 "⚠️ Произошла ошибка. Попробуй ещё раз, я уже смотрю логи."

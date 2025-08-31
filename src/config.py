@@ -33,18 +33,24 @@ class Settings(BaseModel):
     WEBHOOK_SECRET: str | None = os.getenv("WEBHOOK_SECRET") or None
 
     # Models / limits
-    MODEL_DOT: str = os.getenv("MODEL_DOT", "gpt-4o-mini")
     MODEL_DDOT: str = os.getenv("MODEL_DDOT", "gpt-4o")
     GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     MAX_TOKENS_GROQ: int = int(os.getenv("MAX_TOKENS_GROQ", 400))
-    MAX_TOKENS_DOT: int = int(os.getenv("MAX_TOKENS_DOT", 400))
     MAX_TOKENS_DDOT: int = int(os.getenv("MAX_TOKENS_DDOT", 600))
 
     # Behavior
-    REQUIRE_PREFIX: bool = os.getenv("REQUIRE_PREFIX", "true").lower() in (
-        "1",
-        "true",
-        "yes",
+    REQUIRE_PREFIX: bool = Field(
+        os.getenv("REQUIRE_PREFIX", "false").lower()
+        in (
+            "1",
+            "true",
+            "yes",
+        ),
+        description="Если true, пользователю нужен префикс '.' или '..'",
+    )
+    DEFAULT_PROVIDER: str = Field(
+        os.getenv("DEFAULT_PROVIDER", "groq"),
+        description="Провайдер по умолчанию без префикса: 'groq' или 'openai'",
     )
     DIALOG_HISTORY_LEN: int = int(os.getenv("DIALOG_HISTORY_LEN", 5))
 
