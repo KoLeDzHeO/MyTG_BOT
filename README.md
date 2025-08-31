@@ -5,7 +5,8 @@
 ## Режимы запроса (`.` и `..`)
 - `. вопрос` — Groq LLaMA-3-70B в стиле матершинника.
 - `.. вопрос` — OpenAI GPT-4o, отвечает вежливо и структурированно.
-- Если `REQUIRE_PREFIX=false`, точка не обязательна и по умолчанию используется Groq.
+- Если `REQUIRE_PREFIX=false`, префикс не обязателен. В этом случае используется провайдер из переменной
+<code>DEFAULT_PROVIDER</code> (<code>groq</code> или <code>openai</code>). По умолчанию — <code>groq</code>.
 
 ## Переменные окружения
 | Переменная | Назначение |
@@ -16,15 +17,14 @@
 | `WEBHOOK_URL` | URL вебхука (опц.) |
 | `WEBHOOK_SECRET` | секрет вебхука (опц.) |
 | `PORT` | порт вебсервера |
-| `MODEL_DOT` | модель OpenAI для короткого режима |
-| `MODEL_DDOT` | модель OpenAI для полного режима |
+| `MODEL_DDOT` | модель OpenAI |
 | `GROQ_MODEL` | модель Groq |
 | `MAX_TOKENS_GROQ` | предел токенов для Groq |
-| `MAX_TOKENS_DOT` | предел токенов для короткого режима OpenAI |
-| `MAX_TOKENS_DDOT` | предел токенов для полного режима OpenAI |
+| `MAX_TOKENS_DDOT` | предел токенов для OpenAI |
 | `MAX_PROMPT_CHARS` | максимальная длина входного сообщения |
 | `MAX_REPLY_CHARS` | максимальная длина ответа |
 | `REQUIRE_PREFIX` | требовать ли префикс `.`/`..` |
+| `DEFAULT_PROVIDER` | провайдер по умолчанию без префикса: `groq` или `openai` |
 | `DIALOG_HISTORY_LEN` | сколько пар реплик хранить в истории |
 | `LOG_CHAT_ID` | чат для логов (опц.) |
 | `LOG_FORMAT` | формат логов: `plain` или `json` |
