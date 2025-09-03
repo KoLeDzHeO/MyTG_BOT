@@ -3,3 +3,5 @@ openai>=1.100.0,<2
 python-dotenv>=1.0.1
 pydantic>=2.8
 requests>=2.31
+asyncpg>=0.29
+httpx>=0.27
