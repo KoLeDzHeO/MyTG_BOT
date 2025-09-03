@@ -11,7 +11,7 @@
 ## Переменные окружения
 | Переменная | Назначение |
 | --- | --- |
-| `TELEGRAM_TOKEN` | токен бота |
+| `BOT_TOKEN` | токен бота |
 | `OPENAI_API_KEY` | ключ OpenAI |
 | `GROQ_API_KEY` | ключ Groq |
 | `WEBHOOK_URL` | URL вебхука (опц.) |
@@ -28,6 +28,9 @@
 | `DIALOG_HISTORY_LEN` | сколько пар реплик хранить в истории |
 | `LOG_CHAT_ID` | чат для логов (опц.) |
 | `LOG_FORMAT` | формат логов: `plain` или `json` |
+| `DATABASE_URL` | строка подключения к PostgreSQL |
+| `TMDB_KEY` | API ключ TMDb |
+| `LANG_FALLBACKS` | языки фоллбэка TMDb, через запятую |
 
 Антиспам отключён и не поддерживается.
 
@@ -51,3 +54,18 @@ TELEGRAM_TOKEN=123:ABC
 OPENAI_API_KEY=your-openai-key
 GROQ_API_KEY=your-groq-key
 ```
+
+## Проверка команды /add
+
+### Локально
+1. Создайте `.env` и задайте `BOT_TOKEN`, `DATABASE_URL`, `TMDB_KEY` (опц. `LANG_FALLBACKS=ru,en`).
+2. Установите зависимости: `pip install -r requirements.txt`.
+3. Запустите бота: `python main.py`.
+4. В Telegram отправьте: `/add Интерстеллар 2014`.
+5. При отсутствии обязательных переменных при запуске будет выведено имя переменной и подсказка, как её указать.
+
+### Railway
+1. В разделе **Settings → Variables** добавьте `BOT_TOKEN`, `DATABASE_URL`, `TMDB_KEY`.
+2. Задеплойте образ; в логах должно появиться `Bot started`.
+3. Проверьте команду `/add` в чате.
+4. Если какая-либо из переменных не задана, бот завершится с ошибкой и подскажет, какую переменную добавить.

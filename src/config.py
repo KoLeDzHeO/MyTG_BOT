@@ -1,3 +1,4 @@
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -64,6 +65,21 @@ class Settings(BaseModel):
     MAX_PROMPT_CHARS: int = int(os.getenv("MAX_PROMPT_CHARS", 4000))
     MAX_REPLY_CHARS: int = int(os.getenv("MAX_REPLY_CHARS", 3500))
 
+    # Movies / external services
+    DATABASE_URL: str = Field(
+        os.getenv("DATABASE_URL") or ..., description="PostgreSQL connection URL"
+    )
+    TMDB_KEY: str = Field(
+        os.getenv("TMDB_KEY") or ..., description="TMDb API key", min_length=10
+    )
+    LANG_FALLBACKS: list[str] = Field(
+        default_factory=lambda: [
+            s.strip()
+            for s in os.getenv("LANG_FALLBACKS", "ru,en").split(",")
+            if s.strip()
+        ]
+    )
+
 
 try:
     # Мини-валидация диапазонов + понятная диагностика
@@ -76,9 +92,13 @@ try:
 except (ValidationError, AssertionError) as e:
     missing = []
     if not _raw_telegram:
-        missing.append("TELEGRAM_TOKEN (или BOT_TOKEN/TELEGRAM_BOT_TOKEN)")
+        missing.append("BOT_TOKEN")
+    if not os.getenv("DATABASE_URL"):
+        missing.append("DATABASE_URL")
+    if not os.getenv("TMDB_KEY"):
+        missing.append("TMDB_KEY")
     if missing:
-        print("❌ Отсутствуют переменные окружения:", ", ".join(missing))
-        print("   • Railway: Settings → Variables (значения БЕЗ кавычек).")
-        print("   • Локально: .env рядом с main.py (НЕ .env.example).")
+        logging.error("Отсутствуют переменные окружения: %s", ", ".join(missing))
+        logging.error("   • Railway: Settings → Variables (значения БЕЗ кавычек).")
+        logging.error("   • Локально: .env рядом с main.py (НЕ .env.example).")
     raise SystemExit(f"Invalid config: {e}")
