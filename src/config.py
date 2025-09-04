@@ -82,6 +82,10 @@ class Settings(BaseModel):
     )
 
     ADD_CONFIRMATION_MODE: str = os.getenv("ADD_CONFIRMATION_MODE", "strict")
+    CLEANUP_ON_TIMEOUT: bool = (
+        os.getenv("CLEANUP_ON_TIMEOUT", "true").lower() in ("1", "true", "yes")
+    )
+    CLEANUP_NOTICE_SECONDS: int = int(os.getenv("CLEANUP_NOTICE_SECONDS", 8))
 
 
 try:
