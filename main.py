@@ -72,7 +72,7 @@ def main() -> None:
             logging.error("TMDb check failed")
             raise SystemExit("TMDb check failed")
         logging.info(
-            "Bot started v%s languages=%s DB=ok TMDb=ok",
+            "Bot started v%s languages=%s DB=ok TMDb=ok JobQueue=ok",
             VERSION,
             ",".join(config.LANG_FALLBACKS),
         )
@@ -101,6 +101,8 @@ def main() -> None:
         .post_stop(on_shutdown)
         .build()
     )
+    app.job_queue.scheduler
+    logging.info("JobQueue=ok")
 
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("id", id_handler))

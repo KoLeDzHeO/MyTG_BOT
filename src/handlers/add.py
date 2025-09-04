@@ -351,11 +351,14 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             "expires_at": time.time() + PENDING_TTL,
             "lang": lang,
         }
-        context.job_queue.run_once(
-            _timeout_job,
-            PENDING_TTL,
-            data={"key": key, "chat_id": chat_id, "lang": lang},
-        )
+        if context.job_queue:
+            context.job_queue.run_once(
+                _timeout_job,
+                PENDING_TTL,
+                data={"key": key, "chat_id": chat_id, "lang": lang},
+            )
+        else:
+            logging.warning("/add no job_queue: timeout job skipped")
     except Exception:
         rid = uuid.uuid4().hex[:8].upper()
         logging.exception("/add unexpected_error id=%s", rid)
