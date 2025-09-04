@@ -1,5 +1,8 @@
 # Changelog
 
+- Graceful shutdown via PTB lifecycle hooks; resources close cleanly.
+- Removed direct asyncio.run calls to avoid event loop errors.
+- Startup and shutdown logs report DB and TMDb client status.
 - Startup verifies DB and TMDb key; logs "Bot started" with DB=ok TMDb=ok.
 - Unique constraint handling logs unknown names and retries short-id collisions.
 - `/add` validates year range with clearer hints and returns error IDs on failures.
