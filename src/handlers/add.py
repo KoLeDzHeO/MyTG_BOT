@@ -18,18 +18,11 @@ from src.tmdb_client import (
     tmdb_client,
     Candidate,
 )
-from src.exporter import export_movie
+from src.exporter import schedule_export
 from src.i18n import t
+from src.utils.ids import to_short_id
 
-FORMAT_ERROR = "Формат: /add Название 2014"
-YEAR_ERROR = "Формат: /add Название 2014 (год должен быть от 1888 до 2100)"
-NOT_FOUND = "Не нашёл такой фильм в базе TMDb. Попробуй другое написание."
 NO_DATE = "В TMDb нет корректной даты релиза по этому фильму, добавление отменено."
-AUTH_ERROR = "Проблема авторизации TMDb. Проверьте TMDB_KEY."
-RATE_ERROR = "TMDb ограничил частоту запросов. Попробуйте чуть позже."
-TMDB_UNAVAILABLE = "Сервис TMDb временно недоступен, попробуйте позже."
-TECH_ERROR_TEMPLATE = "⚠️ Сервис временно недоступен (id={})"
-DUPLICATE_SIMPLE = "Этот фильм уже в списке (найдён по TMDb)."
 
 PENDING_TTL = 120
 _pending: dict[tuple[int, int, int], dict] = {}
@@ -55,6 +48,16 @@ ROMAN_MAP = {
     "VIII": 8,
     "IX": 9,
     "X": 10,
+    "XI": 11,
+    "XII": 12,
+    "XIII": 13,
+    "XIV": 14,
+    "XV": 15,
+    "XVI": 16,
+    "XVII": 17,
+    "XVIII": 18,
+    "XIX": 19,
+    "XX": 20,
 }
 
 EMOJI_NUM = {
@@ -72,7 +75,7 @@ EMOJI_NUM = {
 
 
 def _extract_part_from_title(title: str) -> Optional[int]:
-    pattern = r"(?i)(?:part|chapter|volume|season|сезон|фильм|film)\s*(\d+|i{1,3}|iv|v|vi{0,3}|ix|x)\b"
+    pattern = r"(?i)(?:part|chapter|volume|season|сезон|фильм|film)\s*([ivxlcdm]+|\d+)\b"
     m = re.search(pattern, title)
     if not m:
         return None
@@ -149,11 +152,11 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             query_title, user_year, part_hint = _parse(context.args)
         except YearFormatError:
             logging.warning("/add year_format_error")
-            await update.message.reply_text(YEAR_ERROR)
+            await update.message.reply_text(t("year_error", lang=lang))
             return
         except ValueError:
             logging.warning("/add format_error")
-            await update.message.reply_text(FORMAT_ERROR)
+            await update.message.reply_text(t("format_error", lang=lang))
             return
         logging.info(
             "/add normalized title=%s year=%s part=%s", query_title, user_year, part_hint
@@ -173,7 +176,7 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 logging.warning(
                     "/add not_found title=%s year=%s", query_title, user_year
                 )
-                await update.message.reply_text(NOT_FOUND)
+                await update.message.reply_text(t("not_found", lang=lang))
                 return
             if candidates[0].belongs_to_collection_id:
                 try:
@@ -188,25 +191,25 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             )
         except TMDbAuthError:
             logging.error("/add tmdb_auth_error")
-            await update.message.reply_text(AUTH_ERROR)
+            await update.message.reply_text(t("auth_error", lang=lang))
             return
         except TMDbRateLimitError:
             logging.warning("/add tmdb_rate_limit")
-            await update.message.reply_text(RATE_ERROR)
+            await update.message.reply_text(t("rate_error", lang=lang))
             return
         except TMDbUnavailableError:
             logging.error("/add tmdb_unavailable")
-            await update.message.reply_text(TMDB_UNAVAILABLE)
+            await update.message.reply_text(t("tmdb_unavailable", lang=lang))
             return
         except TMDbError:
             rid = uuid.uuid4().hex[:8].upper()
             logging.error("/add tmdb_error id=%s", rid)
-            await update.message.reply_text(TECH_ERROR_TEMPLATE.format(rid))
+            await update.message.reply_text(t("tech_error", lang=lang, rid=rid))
             return
         except Exception:
             rid = uuid.uuid4().hex[:8].upper()
             logging.exception("/add unexpected_tmdb_error id=%s", rid)
-            await update.message.reply_text(TECH_ERROR_TEMPLATE.format(rid))
+            await update.message.reply_text(t("tech_error", lang=lang, rid=rid))
             return
 
         # dedupe
@@ -244,18 +247,18 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             except TMDbError:
                 rid = uuid.uuid4().hex[:8].upper()
                 logging.error("/add tmdb_error id=%s", rid)
-                await update.message.reply_text(TECH_ERROR_TEMPLATE.format(rid))
+                await update.message.reply_text(t("tech_error", lang=lang, rid=rid))
                 return
             except Exception:
                 rid = uuid.uuid4().hex[:8].upper()
                 logging.exception("/add unexpected_tmdb_error id=%s", rid)
-                await update.message.reply_text(TECH_ERROR_TEMPLATE.format(rid))
+                await update.message.reply_text(t("tech_error", lang=lang, rid=rid))
                 return
 
             try:
                 if await db.movie_exists_by_tmdb_id(details.tmdb_id):
                     logging.warning("/add tmdb_id=%s duplicate_precheck", details.tmdb_id)
-                    await update.message.reply_text(DUPLICATE_SIMPLE)
+                    await update.message.reply_text(t("add_duplicate_simple", lang=lang))
                     return
                 new_id = await db.insert_movie(
                     title=details.title,
@@ -265,12 +268,12 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 )
             except DuplicateTmdbError:
                 logging.warning("/add tmdb_id=%s duplicate_race", details.tmdb_id)
-                await update.message.reply_text(DUPLICATE_SIMPLE)
+                await update.message.reply_text(t("add_duplicate_simple", lang=lang))
                 return
             except Exception:
                 rid = uuid.uuid4().hex[:8].upper()
                 logging.exception("/add db_error id=%s", rid)
-                await update.message.reply_text(TECH_ERROR_TEMPLATE.format(rid))
+                await update.message.reply_text(t("tech_error", lang=lang, rid=rid))
                 return
 
             genres_text = details.genres if details.genres else "жанры не указаны"
@@ -280,23 +283,24 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 and details.genres_lang != config.LANG_FALLBACKS[0]
             ):
                 genres_text = f"{genres_text} ({details.genres_lang})"
+            short_id = to_short_id(new_id)
             await update.message.reply_text(
-                f"➕ Добавлено #{new_id}\n🎥 «{details.title}» ({details.year}) — {genres_text}"
+                t(
+                    "add_success",
+                    lang=lang,
+                    short_id=short_id,
+                    title=details.title,
+                    year=details.year,
+                    genres=genres_text,
+                )
             )
             logging.info(
                 "/add auto tmdb_id=%s year=%s id=%s", details.tmdb_id, details.year, new_id
             )
             try:
-                await export_movie(
-                    {
-                        "id": new_id,
-                        "tmdb_id": details.tmdb_id,
-                        "title": details.title,
-                        "year": details.year,
-                    }
-                )
+                await schedule_export(context.job_queue)
             except Exception:
-                logging.exception("export_movie failed")
+                logging.exception("export schedule failed")
             return
 
         # confirmation dialog
@@ -310,7 +314,7 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if unknown_year:
             reasons.append("unknown_year")
         logging.warning(
-            "/add ambiguous -> dialog reason=%s top1_id=%s top1_score=%.2f top2_score=%.2f top3_score=%.2f",
+            "/add ambiguous -> dialog reason=[%s] top1_id=%s top1_score=%.2f top2_score=%.2f top3_score=%.2f",
             "|".join(reasons),
             top1.tmdb_id,
             top1.score,
@@ -362,4 +366,4 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     except Exception:
         rid = uuid.uuid4().hex[:8].upper()
         logging.exception("/add unexpected_error id=%s", rid)
-        await update.message.reply_text(TECH_ERROR_TEMPLATE.format(rid))
+        await update.message.reply_text(t("tech_error", lang=lang, rid=rid))
