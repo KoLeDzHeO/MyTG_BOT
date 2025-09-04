@@ -10,3 +10,5 @@
 - Fallback English genres are marked with `(en)`; success logs include genres.
 - Export stub and logs now include movie title and year for easier checks.
 - Added `/list` command to show recently added movies with status icons.
+- `/add` now auto-adds only on strict title match and shows clean similar-title dialogs otherwise.
+- `/add` suggestions tighten short-word matching, swap series hints for part requests, and drop the auto-add button from similar dialogs.
