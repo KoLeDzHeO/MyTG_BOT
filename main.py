@@ -2,11 +2,12 @@ import json
 import logging
 import uuid
 
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 
 from src.config import config
 from src.handlers.gpt_handler import gpt_handler, id_handler, start_handler
 from src.handlers.add import add_handler
+from src.handlers.add_callback import add_callback_handler
 from src import db
 from src.tmdb_client import TMDbAuthError, TMDbError, tmdb_client
 from src.utils.text_utils import mask
@@ -104,6 +105,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("id", id_handler))
     app.add_handler(CommandHandler("add", add_handler))
+    app.add_handler(CallbackQueryHandler(add_callback_handler, pattern=r"^ADD_"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gpt_handler))
 
     app.add_error_handler(on_error)
