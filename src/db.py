@@ -40,6 +40,18 @@ async def movie_exists_by_tmdb_id(tmdb_id: int) -> bool:
     return row is not None
 
 
+async def get_movie_by_tmdb_id(tmdb_id: int) -> Optional[tuple[str, str, int]]:
+    """Return (id, title, year) if movie exists."""
+    assert pool is not None
+    row = await pool.fetchrow(
+        "SELECT id, title, year FROM movies WHERE tmdb_id=$1",
+        tmdb_id,
+    )
+    if row:
+        return row["id"], row["title"], row["year"]
+    return None
+
+
 async def insert_movie(*, title: str, year: int, genres: Optional[str], tmdb_id: int) -> str:
     """Insert movie and return internal id."""
     assert pool is not None

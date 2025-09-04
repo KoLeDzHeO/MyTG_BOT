@@ -80,6 +80,8 @@ class Settings(BaseModel):
         ]
     )
 
+    ADD_CONFIRMATION_MODE: str = os.getenv("ADD_CONFIRMATION_MODE", "strict")
+
 
 try:
     # Мини-валидация диапазонов + понятная диагностика
