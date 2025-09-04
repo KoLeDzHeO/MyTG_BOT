@@ -89,37 +89,44 @@ def _part_emoji(num: Optional[int]) -> str:
     return EMOJI_NUM.get(num or 0, "")
 
 
-class YearFormatError(Exception):
-    pass
+def _norm_title(title: str) -> str:
+    text = title.lower()
+    text = text.replace("-", " ")
+    text = re.sub(r'["\'«»“”„]', "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    tokens = text.split()
+    if len(tokens) >= 2 and tokens[-2] in PART_KEYWORDS:
+        last = tokens[-1]
+        if last.isdigit() or last.upper() in ROMAN_MAP:
+            tokens = tokens[:-2]
+    return " ".join(tokens)
 
 
-def _parse(args: list[str]) -> tuple[str, int, Optional[int]]:
-    if len(args) < 2:
+def _parse(args: list[str]) -> tuple[str, Optional[int], Optional[int]]:
+    tokens = [a.strip() for a in args if a.strip()]
+    if not tokens:
         raise ValueError
-    year_str = args[-1].strip()
-    if not year_str.isdigit() or len(year_str) != 4:
-        raise YearFormatError
-    year = int(year_str)
-    if year < 1888 or year > 2100:
-        raise YearFormatError
-    title_parts = [a.strip() for a in args[:-1] if a.strip()]
-    if not title_parts:
-        raise ValueError
+    user_year: Optional[int] = None
+    if tokens and tokens[-1].isdigit() and len(tokens[-1]) == 4:
+        year = int(tokens[-1])
+        if 1888 <= year <= 2100:
+            user_year = year
+            tokens = tokens[:-1]
     part_hint: Optional[int] = None
-    if len(title_parts) >= 2:
-        prev = title_parts[-2].lower()
-        token = title_parts[-1]
+    if len(tokens) >= 2:
+        prev = tokens[-2].lower()
+        token = tokens[-1]
         if prev in PART_KEYWORDS:
             if token.isdigit():
                 part_hint = int(token)
-                title_parts = title_parts[:-2]
+                tokens = tokens[:-2]
             elif token.upper() in ROMAN_MAP:
                 part_hint = ROMAN_MAP[token.upper()]
-                title_parts = title_parts[:-2]
-    title = " ".join(title_parts).strip()
+                tokens = tokens[:-2]
+    title = " ".join(tokens).strip()
     if len(title) < 2:
         raise ValueError
-    return title, year, part_hint
+    return title, user_year, part_hint
 
 
 def _cleanup_expired() -> None:
@@ -150,17 +157,11 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         lang = update.effective_user.language_code or config.LANG_FALLBACKS[0]
         try:
             query_title, user_year, part_hint = _parse(context.args)
-        except YearFormatError:
-            logging.warning("/add year_format_error")
-            await update.message.reply_text(t("year_error", lang=lang))
-            return
         except ValueError:
             logging.warning("/add format_error")
             await update.message.reply_text(t("format_error", lang=lang))
             return
-        logging.info(
-            "/add normalized title=%s year=%s part=%s", query_title, user_year, part_hint
-        )
+        logging.info("/add no_year title=%s hint_year=%s part=%s", query_title, user_year, part_hint)
 
         _cleanup_expired()
         chat_id = update.effective_chat.id
@@ -171,10 +172,10 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 await update.message.reply_text(t("old_cancelled", lang=lang))
 
         try:
-            candidates = await tmdb_client.search_candidates(query_title, user_year)
+            candidates = await tmdb_client.search_candidates(query_title, None)
             if not candidates:
                 logging.warning(
-                    "/add not_found title=%s year=%s", query_title, user_year
+                    "/add not_found title=%s", query_title
                 )
                 await update.message.reply_text(t("not_found", lang=lang))
                 return
@@ -224,11 +225,6 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         top1 = candidates[0]
         top2 = candidates[1] if len(candidates) > 1 else None
         top3 = candidates[2] if len(candidates) > 2 else None
-        year_mismatch = top1.release_year is not None and top1.release_year != user_year
-        if config.ADD_CONFIRMATION_MODE.lower() != "relaxed":
-            confirm_year = year_mismatch
-        else:
-            confirm_year = False
         gap_close = False
         if top2 and top1.score < top2.score * 1.2:
             gap_close = True
@@ -236,7 +232,67 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             gap_close = True
         collection_trigger = top1.belongs_to_collection_id is not None and part_hint is None
         unknown_year = top1.release_year is None
-        confirm = confirm_year or gap_close or collection_trigger or unknown_year
+        # same title multi-year check
+        groups: dict[str, list[Candidate]] = {}
+        for c in candidates:
+            key = _norm_title(c.title_localized)
+            groups.setdefault(key, []).append(c)
+        group = groups.get(_norm_title(top1.title_localized), [top1])
+        group_years = {c.release_year for c in group if c.release_year is not None}
+        if len(group) > 1 and len(group_years) > 1:
+            options_by_year: dict[int, Candidate] = {}
+            for c in group:
+                if c.release_year is None:
+                    continue
+                prev = options_by_year.get(c.release_year)
+                if not prev or c.popularity > prev.popularity:
+                    options_by_year[c.release_year] = c
+            options = list(options_by_year.values())
+            options.sort(key=lambda c: (c.popularity, c.release_year or 0), reverse=True)
+            options = options[:5]
+            keyboard_buttons = [
+                [
+                    InlineKeyboardButton(
+                        f"{c.title_localized} ({c.release_year})",
+                        callback_data=f"ADD_PICK:{c.tmdb_id}",
+                    )
+                ]
+                for c in options
+            ]
+            keyboard_buttons.append(
+                [InlineKeyboardButton(t("cancel_btn", lang=lang), callback_data="ADD_CANCEL")]
+            )
+            keyboard = InlineKeyboardMarkup(keyboard_buttons)
+            msg = await update.message.reply_text(
+                t("same_title_prompt", lang=lang, title=top1.title_localized),
+                reply_markup=keyboard,
+            )
+            key = (chat_id, user_id, msg.message_id)
+            _pending[key] = {
+                "query": query_title,
+                "user_year": user_year,
+                "options": {c.tmdb_id: c for c in options},
+                "top1_tmdb_id": top1.tmdb_id,
+                "expires_at": time.time() + PENDING_TTL,
+                "lang": lang,
+                "confirm_year": True,
+            }
+            if context.job_queue:
+                context.job_queue.run_once(
+                    _timeout_job,
+                    PENDING_TTL,
+                    data={"key": key, "chat_id": chat_id, "lang": lang},
+                )
+            else:
+                logging.warning("/add no job_queue: timeout job skipped")
+            logging.warning(
+                "/add ambiguous -> dialog reason=same_title_multi_years group_size=%s years=%s",
+                len(group),
+                sorted(group_years),
+            )
+            return
+
+        confirm = gap_close or collection_trigger or unknown_year
 
         if not confirm:
             try:
@@ -295,7 +351,10 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 )
             )
             logging.info(
-                "/add auto tmdb_id=%s year=%s id=%s", details.tmdb_id, details.year, new_id
+                "/add mode=auto tmdb_id=%s year=%s id=%s",
+                details.tmdb_id,
+                details.year,
+                new_id,
             )
             try:
                 await schedule_export(context.job_queue)
@@ -305,8 +364,6 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         # confirmation dialog
         reasons = []
-        if confirm_year:
-            reasons.append("ambiguous_year")
         if gap_close:
             reasons.append("close_scores")
         if collection_trigger:
@@ -341,10 +398,8 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
         if collection_trigger:
             text = t("series_prompt", lang=lang, base_title=top1.title_localized)
-        elif confirm_year:
-            text = t("year_prompt", lang=lang, user_year=user_year)
         else:
-            text = t("year_prompt", lang=lang, user_year=user_year)
+            text = t("year_prompt", lang=lang, user_year=user_year if user_year else "?")
         msg = await update.message.reply_text(text, reply_markup=keyboard)
         key = (chat_id, user_id, msg.message_id)
         _pending[key] = {
@@ -354,6 +409,7 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             "top1_tmdb_id": top1.tmdb_id,
             "expires_at": time.time() + PENDING_TTL,
             "lang": lang,
+            "confirm_year": False,
         }
         if context.job_queue:
             context.job_queue.run_once(

@@ -130,7 +130,14 @@ async def add_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             genres=genres_text,
         )
     )
-    logging.info("/add confirm tmdb_id=%s year=%s id=%s", details.tmdb_id, details.year, new_id)
+    mode = "confirm_year" if pending.get("confirm_year") else "confirm"
+    logging.info(
+        "/add mode=%s tmdb_id=%s year=%s id=%s",
+        mode,
+        details.tmdb_id,
+        details.year,
+        new_id,
+    )
     _pending.pop(key, None)
     try:
         await schedule_export(context.job_queue)
