@@ -10,8 +10,9 @@ from src.db import DuplicateTmdbError, get_movie_by_tmdb_id
 from src.tmdb_client import tmdb_client, TMDbError
 from src.config import config
 from src.i18n import t
-from src.exporter import export_movie
-from .add import _pending, NO_DATE, TECH_ERROR_TEMPLATE
+from src.exporter import schedule_export
+from src.utils.ids import to_short_id
+from .add import _pending, NO_DATE
 
 
 async def add_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -66,14 +67,14 @@ async def add_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     except TMDbError:
         rid = uuid.uuid4().hex[:8].upper()
         logging.error("/add callback tmdb_error id=%s", rid)
-        await query.message.reply_text(TECH_ERROR_TEMPLATE.format(rid))
+        await query.message.reply_text(t("tech_error", lang=lang, rid=rid))
         _pending.pop(key, None)
         await query.answer()
         return
     except Exception:
         rid = uuid.uuid4().hex[:8].upper()
         logging.exception("/add callback unexpected_tmdb_error id=%s", rid)
-        await query.message.reply_text(TECH_ERROR_TEMPLATE.format(rid))
+        await query.message.reply_text(t("tech_error", lang=lang, rid=rid))
         _pending.pop(key, None)
         await query.answer()
         return
@@ -110,7 +111,7 @@ async def add_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception:
         rid = uuid.uuid4().hex[:8].upper()
         logging.exception("/add callback db_error id=%s", rid)
-        await query.message.reply_text(TECH_ERROR_TEMPLATE.format(rid))
+        await query.message.reply_text(t("tech_error", lang=lang, rid=rid))
         _pending.pop(key, None)
         await query.answer()
         return
@@ -118,20 +119,21 @@ async def add_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     genres_text = details.genres if details.genres else "жанры не указаны"
     if details.genres and details.genres_lang and details.genres_lang != config.LANG_FALLBACKS[0]:
         genres_text = f"{genres_text} ({details.genres_lang})"
+    short_id = to_short_id(new_id)
     await query.message.reply_text(
-        t("added", lang=lang, title=details.title, year=details.year, genres=genres_text)
+        t(
+            "add_success",
+            lang=lang,
+            short_id=short_id,
+            title=details.title,
+            year=details.year,
+            genres=genres_text,
+        )
     )
     logging.info("/add confirm tmdb_id=%s year=%s id=%s", details.tmdb_id, details.year, new_id)
     _pending.pop(key, None)
     try:
-        await export_movie(
-            {
-                "id": new_id,
-                "tmdb_id": details.tmdb_id,
-                "title": details.title,
-                "year": details.year,
-            }
-        )
+        await schedule_export(context.job_queue)
     except Exception:
-        logging.exception("export_movie failed")
+        logging.exception("export schedule failed")
     await query.answer()

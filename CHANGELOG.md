@@ -9,3 +9,4 @@
 - TMDb errors (401/429/5xx) log status codes with response snippets.
 - Fallback English genres are marked with `(en)`; success logs include genres.
 - Export stub and logs now include movie title and year for easier checks.
+- Added `/list` command to show recently added movies with status icons.

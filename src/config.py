@@ -72,6 +72,7 @@ class Settings(BaseModel):
     TMDB_KEY: str = Field(
         os.getenv("TMDB_KEY") or ..., description="TMDb API key", min_length=10
     )
+    MEGA_URL: str | None = os.getenv("MEGA_URL") or None
     LANG_FALLBACKS: list[str] = Field(
         default_factory=lambda: [
             s.strip()
