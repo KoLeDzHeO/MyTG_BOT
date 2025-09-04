@@ -86,16 +86,25 @@ async def insert_movie(*, title: str, year: int, genres: Optional[str], tmdb_id:
     raise RuntimeError("Unable to generate unique id")
 
 
-async def get_last_movies(limit: int = 30) -> tuple[int, list[tuple[str, str, int, str]]]:
+async def get_last_movies(
+    limit: int = 30,
+) -> tuple[int, list[tuple[str, str, int, str, Optional[str]]]]:
     """Return total count and last `limit` movies ordered by created_at ASC."""
     assert pool is not None
     total = await pool.fetchval("SELECT COUNT(*) FROM movies")
     rows = await pool.fetch(
-        "SELECT id, title, year, status FROM movies ORDER BY created_at DESC LIMIT $1",
+        "SELECT id, title, year, status, genres FROM movies ORDER BY created_at DESC LIMIT $1",
         limit,
     )
     return total, [
-        (r["id"], r["title"], r["year"], r["status"]) for r in reversed(list(rows))
+        (
+            r["id"],
+            r["title"],
+            r["year"],
+            r["status"],
+            r["genres"],
+        )
+        for r in reversed(list(rows))
     ]
 
 

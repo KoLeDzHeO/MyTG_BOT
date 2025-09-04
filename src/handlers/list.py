@@ -12,6 +12,7 @@ from src.utils.ids import to_short_id
 from src.movies.constants import icon
 
 TELEGRAM_LIMIT = 4000
+MAX_GENRES_LEN = 60
 
 
 async def list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -26,10 +27,16 @@ async def list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             logging.info("/list count_total=0 shown=0")
             return
 
-        lines = [
-            f"{icon(status)} {to_short_id(mid)} — {title} ({year})"
-            for mid, title, year, status in rows
-        ]
+        lines = []
+        for mid, title, year, status, genres in rows:
+            line = f"{icon(status)} {to_short_id(mid)} — {title} ({year})"
+            if genres:
+                genres = genres.strip()
+                if genres:
+                    if len(genres) > MAX_GENRES_LEN:
+                        genres = genres[: MAX_GENRES_LEN - 1].rstrip() + "…"
+                    line = f"{line} — {genres}"
+            lines.append(line)
 
         chunks: list[str] = []
         current = ""
