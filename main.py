@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import uuid
@@ -61,21 +60,46 @@ async def on_error(update, context):
 
 def main() -> None:
     _make_logger()
-    asyncio.run(db.init())
-    try:
-        asyncio.run(tmdb_client.check_key())
-    except TMDbAuthError:
-        logging.error("TMDb key invalid")
-        raise SystemExit("TMDb key invalid")
-    except TMDbError:
-        logging.error("TMDb check failed")
-        raise SystemExit("TMDb check failed")
-    logging.info(
-        "Bot started v%s languages=%s DB=ok TMDb=ok",
-        VERSION,
-        ",".join(config.LANG_FALLBACKS),
+    async def on_startup(app):
+        await db.init()
+        try:
+            await tmdb_client.check_key()
+        except TMDbAuthError:
+            logging.error("TMDb key invalid")
+            raise SystemExit("TMDb key invalid")
+        except TMDbError:
+            logging.error("TMDb check failed")
+            raise SystemExit("TMDb check failed")
+        logging.info(
+            "Bot started v%s languages=%s DB=ok TMDb=ok",
+            VERSION,
+            ",".join(config.LANG_FALLBACKS),
+        )
+
+    async def on_shutdown(app):
+        db_status = "ok"
+        tmdb_status = "ok"
+        try:
+            await db.close()
+        except Exception as e:
+            logging.error("Shutdown: closing DB failed: %s", e)
+            db_status = "error"
+        try:
+            await tmdb_client.aclose()
+        except Exception as e:
+            logging.error("Shutdown: closing TMDb failed: %s", e)
+            tmdb_status = "error"
+        logging.info(
+            "Shutdown: closing DB... %s; closing TMDb... %s", db_status, tmdb_status
+        )
+
+    app = (
+        Application.builder()
+        .token(config.TELEGRAM_TOKEN)
+        .post_init(on_startup)
+        .post_stop(on_shutdown)
+        .build()
     )
-    app = Application.builder().token(config.TELEGRAM_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("id", id_handler))
@@ -86,11 +110,7 @@ def main() -> None:
 
     logging.info("config ok: webhook=False require_prefix=%s", config.REQUIRE_PREFIX)
     logging.info("polling")
-    try:
-        app.run_polling(drop_pending_updates=True)
-    finally:
-        asyncio.run(db.close())
-        asyncio.run(tmdb_client.aclose())
+    app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
