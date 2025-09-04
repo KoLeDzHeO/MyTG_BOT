@@ -102,6 +102,37 @@ def _norm_title(title: str) -> str:
     return " ".join(tokens)
 
 
+def _levenshtein(a: str, b: str) -> int:
+    """Compute Levenshtein distance between two strings."""
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+    m, n = len(a), len(b)
+    prev = list(range(n + 1))
+    curr = [0] * (n + 1)
+    for i in range(1, m + 1):
+        curr[0] = i
+        for j in range(1, n + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            curr[j] = min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+        prev, curr = curr, prev
+    return prev[n]
+
+
+def _token_set_ratio(a: str, b: str) -> float:
+    """Approximate token_set_ratio from fuzzywuzzy."""
+    import difflib
+
+    tokens_a = set(a.split())
+    tokens_b = set(b.split())
+    sa = " ".join(sorted(tokens_a))
+    sb = " ".join(sorted(tokens_b))
+    return difflib.SequenceMatcher(None, sa, sb).ratio()
+
+
 def _parse(args: list[str]) -> tuple[str, Optional[int], Optional[int]]:
     tokens = [a.strip() for a in args if a.strip()]
     if not tokens:
@@ -222,38 +253,27 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         candidates = sorted(unique.values(), key=lambda c: c.score, reverse=True)
         candidates = [c for c in candidates if c.media_type == "movie"]
 
-        top1 = candidates[0]
-        top2 = candidates[1] if len(candidates) > 1 else None
-        top3 = candidates[2] if len(candidates) > 2 else None
-        gap_close = False
-        if top2 and top1.score < top2.score * 1.2:
-            gap_close = True
-        if top3 and top1.score < top3.score * 1.2:
-            gap_close = True
-        collection_trigger = top1.belongs_to_collection_id is not None and part_hint is None
-        unknown_year = top1.release_year is None
-        # same title multi-year check
-        groups: dict[str, list[Candidate]] = {}
+        q_norm = _norm_title(query_title)
         for c in candidates:
-            key = _norm_title(c.title_localized)
-            groups.setdefault(key, []).append(c)
-        group = groups.get(_norm_title(top1.title_localized), [top1])
-        group_years = {c.release_year for c in group if c.release_year is not None}
-        if len(group) > 1 and len(group_years) > 1:
-            options_by_year: dict[int, Candidate] = {}
-            for c in group:
-                if c.release_year is None:
-                    continue
-                prev = options_by_year.get(c.release_year)
-                if not prev or c.popularity > prev.popularity:
-                    options_by_year[c.release_year] = c
-            options = list(options_by_year.values())
-            options.sort(key=lambda c: (c.popularity, c.release_year or 0), reverse=True)
-            options = options[:5]
+            c.part_num = _extract_part_from_title(c.title_localized) or _extract_part_from_title(c.original_title)
+            c.norm_local = _norm_title(c.title_localized)
+            c.norm_orig = _norm_title(c.original_title)
+        exact_matches = [
+            c
+            for c in candidates
+            if c.norm_local == q_norm or c.norm_orig == q_norm
+        ]
+
+        top1 = candidates[0]
+
+        # part hint handling with exact matches
+        if part_hint is not None and exact_matches:
+            exact_matches.sort(key=lambda c: (c.part_num != part_hint, -c.score))
+            options = exact_matches[:5]
             keyboard_buttons = [
                 [
                     InlineKeyboardButton(
-                        f"{c.title_localized} ({c.release_year})",
+                        f"{c.title_localized} ({c.release_year if c.release_year is not None else t('year_unknown', lang=lang)})",
                         callback_data=f"ADD_PICK:{c.tmdb_id}",
                     )
                 ]
@@ -264,8 +284,7 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             )
             keyboard = InlineKeyboardMarkup(keyboard_buttons)
             msg = await update.message.reply_text(
-                t("same_title_prompt", lang=lang, title=top1.title_localized),
-                reply_markup=keyboard,
+                t("series_prompt", lang=lang, base_title=q_norm), reply_markup=keyboard
             )
             key = (chat_id, user_id, msg.message_id)
             _pending[key] = {
@@ -275,7 +294,7 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 "top1_tmdb_id": top1.tmdb_id,
                 "expires_at": time.time() + PENDING_TTL,
                 "lang": lang,
-                "confirm_year": True,
+                "confirm_year": False,
             }
             if context.job_queue:
                 context.job_queue.run_once(
@@ -286,120 +305,297 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             else:
                 logging.warning("/add no job_queue: timeout job skipped")
             logging.warning(
-                "/add ambiguous -> dialog reason=same_title_multi_years group_size=%s years=%s",
-                len(group),
-                sorted(group_years),
+                "/add ambiguous -> dialog reason=part_hint_matches count=%s",
+                len(options),
             )
             return
 
-        confirm = gap_close or collection_trigger or unknown_year
-
-        if not confirm:
-            try:
-                details = await tmdb_client.get_movie_details(top1.tmdb_id)
-                if not details:
-                    await update.message.reply_text(NO_DATE)
+        if len(exact_matches) == 1 and part_hint is None:
+            cand = exact_matches[0]
+            if cand.release_year is not None and cand.tmdb_id == top1.tmdb_id:
+                try:
+                    details = await tmdb_client.get_movie_details(cand.tmdb_id)
+                    if not details:
+                        await update.message.reply_text(NO_DATE)
+                        return
+                except TMDbError:
+                    rid = uuid.uuid4().hex[:8].upper()
+                    logging.error("/add tmdb_error id=%s", rid)
+                    await update.message.reply_text(t("tech_error", lang=lang, rid=rid))
                     return
-            except TMDbError:
-                rid = uuid.uuid4().hex[:8].upper()
-                logging.error("/add tmdb_error id=%s", rid)
-                await update.message.reply_text(t("tech_error", lang=lang, rid=rid))
-                return
-            except Exception:
-                rid = uuid.uuid4().hex[:8].upper()
-                logging.exception("/add unexpected_tmdb_error id=%s", rid)
-                await update.message.reply_text(t("tech_error", lang=lang, rid=rid))
-                return
-
-            try:
-                if await db.movie_exists_by_tmdb_id(details.tmdb_id):
-                    logging.warning("/add tmdb_id=%s duplicate_precheck", details.tmdb_id)
-                    await update.message.reply_text(t("add_duplicate_simple", lang=lang))
+                except Exception:
+                    rid = uuid.uuid4().hex[:8].upper()
+                    logging.exception("/add unexpected_tmdb_error id=%s", rid)
+                    await update.message.reply_text(t("tech_error", lang=lang, rid=rid))
                     return
-                new_id = await db.insert_movie(
-                    title=details.title,
-                    year=details.year,
-                    genres=details.genres,
-                    tmdb_id=details.tmdb_id,
+
+                try:
+                    if await db.movie_exists_by_tmdb_id(details.tmdb_id):
+                        logging.warning(
+                            "/add tmdb_id=%s duplicate_precheck", details.tmdb_id
+                        )
+                        await update.message.reply_text(
+                            t("add_duplicate_simple", lang=lang)
+                        )
+                        return
+                    new_id = await db.insert_movie(
+                        title=details.title,
+                        year=details.year,
+                        genres=details.genres,
+                        tmdb_id=details.tmdb_id,
+                    )
+                except DuplicateTmdbError:
+                    logging.warning(
+                        "/add tmdb_id=%s duplicate_race", details.tmdb_id
+                    )
+                    await update.message.reply_text(
+                        t("add_duplicate_simple", lang=lang)
+                    )
+                    return
+                except Exception:
+                    rid = uuid.uuid4().hex[:8].upper()
+                    logging.exception("/add db_error id=%s", rid)
+                    await update.message.reply_text(
+                        t("tech_error", lang=lang, rid=rid)
+                    )
+                    return
+
+                genres_text = details.genres if details.genres else "жанры не указаны"
+                if (
+                    details.genres
+                    and details.genres_lang
+                    and details.genres_lang != config.LANG_FALLBACKS[0]
+                ):
+                    genres_text = f"{genres_text} ({details.genres_lang})"
+                short_id = to_short_id(new_id)
+                await update.message.reply_text(
+                    t(
+                        "add_success",
+                        lang=lang,
+                        short_id=short_id,
+                        title=details.title,
+                        year=details.year,
+                        genres=genres_text,
+                    )
                 )
-            except DuplicateTmdbError:
-                logging.warning("/add tmdb_id=%s duplicate_race", details.tmdb_id)
-                await update.message.reply_text(t("add_duplicate_simple", lang=lang))
-                return
-            except Exception:
-                rid = uuid.uuid4().hex[:8].upper()
-                logging.exception("/add db_error id=%s", rid)
-                await update.message.reply_text(t("tech_error", lang=lang, rid=rid))
+                logging.info(
+                    "/add mode=auto tmdb_id=%s year=%s id=%s",
+                    details.tmdb_id,
+                    details.year,
+                    new_id,
+                )
+                try:
+                    await schedule_export(context.job_queue)
+                except Exception:
+                    logging.exception("export schedule failed")
                 return
 
-            genres_text = details.genres if details.genres else "жанры не указаны"
-            if (
-                details.genres
-                and details.genres_lang
-                and details.genres_lang != config.LANG_FALLBACKS[0]
-            ):
-                genres_text = f"{genres_text} ({details.genres_lang})"
-            short_id = to_short_id(new_id)
-            await update.message.reply_text(
-                t(
-                    "add_success",
-                    lang=lang,
-                    short_id=short_id,
-                    title=details.title,
-                    year=details.year,
-                    genres=genres_text,
+        if len(exact_matches) > 1:
+            titles = {c.title_localized for c in exact_matches}
+            if len(titles) == 1:
+                group_years = {c.release_year for c in exact_matches if c.release_year is not None}
+                if group_years:
+                    options_by_year: dict[int, Candidate] = {}
+                    for c in exact_matches:
+                        if c.release_year is None:
+                            continue
+                        prev = options_by_year.get(c.release_year)
+                        if not prev or c.popularity > prev.popularity:
+                            options_by_year[c.release_year] = c
+                    options = list(options_by_year.values())
+                    options.sort(
+                        key=lambda c: (c.popularity, c.release_year or 0), reverse=True
+                    )
+                    options = options[:5]
+                    keyboard_buttons = [
+                        [
+                            InlineKeyboardButton(
+                                f"{c.title_localized} ({c.release_year})",
+                                callback_data=f"ADD_PICK:{c.tmdb_id}",
+                            )
+                        ]
+                        for c in options
+                    ]
+                    keyboard_buttons.append(
+                        [InlineKeyboardButton(t("cancel_btn", lang=lang), callback_data="ADD_CANCEL")]
+                    )
+                    keyboard = InlineKeyboardMarkup(keyboard_buttons)
+                    msg = await update.message.reply_text(
+                        t("same_title_prompt", lang=lang, title=options[0].title_localized),
+                        reply_markup=keyboard,
+                    )
+                    key = (chat_id, user_id, msg.message_id)
+                    _pending[key] = {
+                        "query": query_title,
+                        "user_year": user_year,
+                        "options": {c.tmdb_id: c for c in options},
+                        "top1_tmdb_id": top1.tmdb_id,
+                        "expires_at": time.time() + PENDING_TTL,
+                        "lang": lang,
+                        "confirm_year": True,
+                    }
+                    if context.job_queue:
+                        context.job_queue.run_once(
+                            _timeout_job,
+                            PENDING_TTL,
+                            data={"key": key, "chat_id": chat_id, "lang": lang},
+                        )
+                    else:
+                        logging.warning("/add no job_queue: timeout job skipped")
+                    logging.warning(
+                        "/add ambiguous -> dialog reason=same_title_multi_years count=%s years=%s",
+                        len(exact_matches),
+                        sorted(group_years),
+                    )
+                    return
+                options = sorted(
+                    exact_matches,
+                    key=lambda c: (
+                        (c.part_num != part_hint) if part_hint is not None else False,
+                        -c.score,
+                    ),
+                )[:5]
+                keyboard_buttons = []
+                for c in options:
+                    part_num = c.part_num
+                    year_text = t("year_unknown", lang=lang)
+                    prefix = f"{_part_emoji(part_num)} " if part_num else ""
+                    keyboard_buttons.append(
+                        [
+                            InlineKeyboardButton(
+                                f"{prefix}{c.title_localized} ({year_text})",
+                                callback_data=f"ADD_PICK:{c.tmdb_id}",
+                            )
+                        ]
+                    )
+                keyboard_buttons.append(
+                    [InlineKeyboardButton(t("cancel_btn", lang=lang), callback_data="ADD_CANCEL")]
+                )
+                keyboard = InlineKeyboardMarkup(keyboard_buttons)
+                text = (
+                    t("series_prompt", lang=lang, base_title=q_norm)
+                    if part_hint is not None
+                    else t("similar_prompt", lang=lang)
+                )
+                msg = await update.message.reply_text(text, reply_markup=keyboard)
+                key = (chat_id, user_id, msg.message_id)
+                _pending[key] = {
+                    "query": query_title,
+                    "user_year": user_year,
+                    "options": {c.tmdb_id: c for c in options},
+                    "top1_tmdb_id": top1.tmdb_id,
+                    "expires_at": time.time() + PENDING_TTL,
+                    "lang": lang,
+                    "confirm_year": False,
+                }
+                if context.job_queue:
+                    context.job_queue.run_once(
+                        _timeout_job,
+                        PENDING_TTL,
+                        data={"key": key, "chat_id": chat_id, "lang": lang},
+                    )
+                else:
+                    logging.warning("/add no job_queue: timeout job skipped")
+                logging.warning(
+                    "/add ambiguous -> dialog reason=title_no_years count=%s",
+                    len(exact_matches),
+                )
+                return
+
+            exact_matches.sort(
+                key=lambda c: (
+                    (c.part_num != part_hint) if part_hint is not None else False,
+                    -c.score,
                 )
             )
-            logging.info(
-                "/add mode=auto tmdb_id=%s year=%s id=%s",
-                details.tmdb_id,
-                details.year,
-                new_id,
+            options = exact_matches[:5]
+            keyboard_buttons = [
+                [
+                    InlineKeyboardButton(
+                        f"{c.title_localized} ({c.release_year if c.release_year is not None else t('year_unknown', lang=lang)})",
+                        callback_data=f"ADD_PICK:{c.tmdb_id}",
+                    )
+                ]
+                for c in options
+            ]
+            keyboard_buttons.append(
+                [InlineKeyboardButton(t("cancel_btn", lang=lang), callback_data="ADD_CANCEL")]
             )
-            try:
-                await schedule_export(context.job_queue)
-            except Exception:
-                logging.exception("export schedule failed")
+            keyboard = InlineKeyboardMarkup(keyboard_buttons)
+            msg = await update.message.reply_text(
+                t("similar_prompt", lang=lang), reply_markup=keyboard
+            )
+            key = (chat_id, user_id, msg.message_id)
+            _pending[key] = {
+                "query": query_title,
+                "user_year": user_year,
+                "options": {c.tmdb_id: c for c in options},
+                "top1_tmdb_id": top1.tmdb_id,
+                "expires_at": time.time() + PENDING_TTL,
+                "lang": lang,
+                "confirm_year": False,
+            }
+            if context.job_queue:
+                context.job_queue.run_once(
+                    _timeout_job,
+                    PENDING_TTL,
+                    data={"key": key, "chat_id": chat_id, "lang": lang},
+                )
+            else:
+                logging.warning("/add no job_queue: timeout job skipped")
+            logging.warning(
+                "/add ambiguous -> dialog reason=multiple_exact count=%s",
+                len(options),
+            )
             return
 
-        # confirmation dialog
-        reasons = []
-        if gap_close:
-            reasons.append("close_scores")
-        if collection_trigger:
-            reasons.append("collection")
-        if unknown_year:
-            reasons.append("unknown_year")
-        logging.warning(
-            "/add ambiguous -> dialog reason=[%s] top1_id=%s top1_score=%.2f top2_score=%.2f top3_score=%.2f",
-            "|".join(reasons),
-            top1.tmdb_id,
-            top1.score,
-            top2.score if top2 else 0,
-            top3.score if top3 else 0,
+        # no exact matches -> similar dialog
+        similar: list[tuple[Candidate, int]] = []
+        for c in candidates:
+            cand_norm = _norm_title(c.title_localized)
+            if cand_norm == q_norm:
+                continue
+            dist = _levenshtein(q_norm, cand_norm)
+            ratio = _token_set_ratio(q_norm, cand_norm)
+            limit = 1 if len(q_norm) <= 5 else 2
+            if dist <= limit or ratio >= 0.9:
+                similar.append((c, dist))
+        if not similar:
+            similar = [(c, _levenshtein(q_norm, _norm_title(c.title_localized))) for c in candidates]
+        similar.sort(
+            key=lambda x: (
+                (x[0].part_num != part_hint) if part_hint is not None else False,
+                x[1],
+                -x[0].score,
+            )
         )
-        options = candidates[:5]
+        options = [c for c, _ in similar[:5]]
         keyboard_buttons = []
         for c in options:
             part_num = _extract_part_from_title(c.title_localized) or _extract_part_from_title(c.original_title)
             year_text = c.release_year if c.release_year is not None else t("year_unknown", lang=lang)
             prefix = f"{_part_emoji(part_num)} " if part_num else ""
-            btn = InlineKeyboardButton(
-                f"{prefix}{c.title_localized} ({year_text})",
-                callback_data=f"ADD_PICK:{c.tmdb_id}",
+            keyboard_buttons.append(
+                [
+                    InlineKeyboardButton(
+                        f"{prefix}{c.title_localized} ({year_text})",
+                        callback_data=f"ADD_PICK:{c.tmdb_id}",
+                    )
+                ]
             )
-            keyboard_buttons.append([btn])
         keyboard_buttons.append(
-            [
-                InlineKeyboardButton(t("add_found_btn", lang=lang), callback_data="ADD_TOP1"),
-                InlineKeyboardButton(t("cancel_btn", lang=lang), callback_data="ADD_CANCEL"),
-            ]
+            [InlineKeyboardButton(t("cancel_btn", lang=lang), callback_data="ADD_CANCEL")]
         )
         keyboard = InlineKeyboardMarkup(keyboard_buttons)
-        if collection_trigger:
-            text = t("series_prompt", lang=lang, base_title=top1.title_localized)
-        else:
-            text = t("year_prompt", lang=lang, user_year=user_year if user_year else "?")
+        text = (
+            t("year_prompt", lang=lang, user_year=user_year)
+            if user_year
+            else (
+                t("series_prompt", lang=lang, base_title=q_norm)
+                if part_hint is not None
+                else t("similar_prompt", lang=lang)
+            )
+        )
         msg = await update.message.reply_text(text, reply_markup=keyboard)
         key = (chat_id, user_id, msg.message_id)
         _pending[key] = {
@@ -419,6 +615,12 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             )
         else:
             logging.warning("/add no job_queue: timeout job skipped")
+        logging.warning(
+            "/add ambiguous -> dialog reason=title_mismatch query_norm=%s top1_norm=%s",
+            q_norm,
+            top1.norm_local,
+        )
+        return
     except Exception:
         rid = uuid.uuid4().hex[:8].upper()
         logging.exception("/add unexpected_error id=%s", rid)
