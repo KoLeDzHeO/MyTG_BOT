@@ -27,6 +27,9 @@ class Config:
     # 🔑 Ключ TMDb API. Переменная окружения: TMDB_KEY
     TMDB_KEY: str = os.getenv("TMDB_KEY", "")
 
+    # 🛢️ URL подключения к базе (Postgres). ENV: DATABASE_URL
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+
     # 🌐 Порядок языков по умолчанию (первый — основной). Меняй список при необходимости
     LANG_FALLBACKS: List[str] = field(default_factory=lambda: ["ru", "en"])
 
