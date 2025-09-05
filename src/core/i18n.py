@@ -33,6 +33,13 @@ MESSAGES = {
             "ℹ️ Фильмы ищутся через TMDb.\n"
             "This product uses the TMDb API but is not endorsed or certified by TMDb."
         ),
+        "done_need_id": "Укажи ID фильма, например: /done 1a2b3c",
+        "done_prefix_too_short": "Укажи хотя бы 4 символа ID.",
+        "done_not_found": "Не нашёл фильм с таким ID.",
+        "done_ambiguous": "Несколько совпадений: {sample}",
+        "done_deleted": "Фильм {short_id} — “{title}” удалён.",
+        "done_already": "Фильм {short_id} — “{title}” уже отмечен.",
+        "done_ok": "✅ Просмотрено {short_id}\n🎬 “{title}”",
     },
     "en": {
         "series_prompt": "Looks like it's a series '{base_title}'. Choose a part:",
@@ -55,6 +62,13 @@ MESSAGES = {
         "tmdb_unavailable": "TMDb service is temporarily unavailable, try later.",
         "tech_error": "⚠️ Service temporarily unavailable (id={rid})",
         "same_title_prompt": "Found multiple releases of '{title}'. Pick a year:",
+        "done_need_id": "Specify movie ID, e.g., /done 1a2b3c",
+        "done_prefix_too_short": "Provide at least 4 characters of the ID.",
+        "done_not_found": "Movie not found for this ID.",
+        "done_ambiguous": "Multiple matches: {sample}",
+        "done_deleted": "Movie {short_id} — '{title}' is deleted.",
+        "done_already": "Movie {short_id} — '{title}' already marked as watched.",
+        "done_ok": "✅ Marked as watched {short_id}\n🎬 '{title}'",
     },
 }
 
