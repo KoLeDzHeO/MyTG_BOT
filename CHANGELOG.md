@@ -15,3 +15,4 @@
 - `/add` now requires a year and shows a dedicated hint when it is missing or invalid.
   <!-- removed: `/list` no longer displays genres to keep the list clean -->
 - Added `/help` command to show available commands.
+ - Config: added LIST_TTL_SECONDS (auto-delete interval for /list messages).
