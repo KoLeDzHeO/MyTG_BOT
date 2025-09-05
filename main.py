@@ -4,15 +4,15 @@ import uuid
 
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 
-from src.config import config
-from src.handlers.gpt_handler import gpt_handler, id_handler, start_handler
+from src.core.config import config
+from src.handlers.gpt import gpt_handler, id_handler, start_handler
 from src.handlers.add import add_handler
 from src.handlers.add_callback import add_callback_handler
 from src.handlers.list import list_handler
 from src.handlers.help import help_handler
-from src import db
-from src.tmdb_client import TMDbAuthError, TMDbError, tmdb_client
-from src.utils.text_utils import mask
+from src.core import db
+from src.clients.tmdb import TMDbAuthError, TMDbError, tmdb_client
+from src.utils.text import mask
 
 VERSION = "1.0.0"
 

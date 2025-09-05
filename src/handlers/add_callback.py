@@ -5,12 +5,12 @@ import uuid
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from src import db
-from src.db import DuplicateTmdbError, get_movie_by_tmdb_id
-from src.tmdb_client import tmdb_client, TMDbError
-from src.config import config
-from src.i18n import t
-from src.exporter import schedule_export
+from src.core import db
+from src.core.db import DuplicateTmdbError, get_movie_by_tmdb_id
+from src.clients.tmdb import tmdb_client, TMDbError
+from src.core.config import config
+from src.core.i18n import t
+from src.services.exporter import schedule_export
 from src.utils.ids import to_short_id
 from .add import _pending, NO_DATE
 

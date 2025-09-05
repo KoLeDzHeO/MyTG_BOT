@@ -4,13 +4,16 @@ import uuid
 import re
 from typing import Optional
 
+from cachetools import TTLCache
+import roman
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from src import db
-from src.config import config
-from src.db import DuplicateTmdbError
-from src.tmdb_client import (
+from src.core import db
+from src.core.config import config
+from src.core.db import DuplicateTmdbError
+from src.clients.tmdb import (
     TMDbAuthError,
     TMDbError,
     TMDbRateLimitError,
@@ -18,14 +21,14 @@ from src.tmdb_client import (
     tmdb_client,
     Candidate,
 )
-from src.exporter import schedule_export
-from src.i18n import t
+from src.services.exporter import schedule_export
+from src.core.i18n import t
 from src.utils.ids import to_short_id
 
 NO_DATE = "В TMDb нет корректной даты релиза по этому фильму, добавление отменено."
 
-PENDING_TTL = 120
-_pending: dict[tuple[int, int, int], dict] = {}
+# кэш ожидания выбора фильма
+_pending: TTLCache = TTLCache(maxsize=100, ttl=config.ADD_PENDING_TTL)
 
 
 
@@ -37,29 +40,6 @@ PART_KEYWORDS = {
     "сезон",
     "фильм",
     "film",
-}
-
-ROMAN_MAP = {
-    "I": 1,
-    "II": 2,
-    "III": 3,
-    "IV": 4,
-    "V": 5,
-    "VI": 6,
-    "VII": 7,
-    "VIII": 8,
-    "IX": 9,
-    "X": 10,
-    "XI": 11,
-    "XII": 12,
-    "XIII": 13,
-    "XIV": 14,
-    "XV": 15,
-    "XVI": 16,
-    "XVII": 17,
-    "XVIII": 18,
-    "XIX": 19,
-    "XX": 20,
 }
 
 EMOJI_NUM = {
@@ -84,7 +64,10 @@ def _extract_part_from_title(title: str) -> Optional[int]:
     token = m.group(1)
     if token.isdigit():
         return int(token)
-    return ROMAN_MAP.get(token.upper())
+    try:
+        return roman.fromRoman(token.upper())
+    except roman.InvalidRomanNumeralError:
+        return None
 
 
 def _part_emoji(num: Optional[int]) -> str:
@@ -99,8 +82,14 @@ def _norm_title(title: str) -> str:
     tokens = text.split()
     if len(tokens) >= 2 and tokens[-2] in PART_KEYWORDS:
         last = tokens[-1]
-        if last.isdigit() or last.upper() in ROMAN_MAP:
+        if last.isdigit():
             tokens = tokens[:-2]
+        else:
+            try:
+                roman.fromRoman(last.upper())
+                tokens = tokens[:-2]
+            except roman.InvalidRomanNumeralError:
+                pass
     return " ".join(tokens)
 
 
@@ -115,7 +104,7 @@ def _parse(args: list[str]) -> tuple[str, int, Optional[int]]:
     if not tokens[-1].isdigit() or len(tokens[-1]) != 4:
         raise YearError
     year = int(tokens[-1])
-    if year < 1888 or year > 2100:
+    if year < config.ADD_YEAR_MIN or year > config.ADD_YEAR_MAX:
         raise YearError
     tokens = tokens[:-1]
     part_hint: Optional[int] = None
@@ -126,20 +115,21 @@ def _parse(args: list[str]) -> tuple[str, int, Optional[int]]:
             if token.isdigit():
                 part_hint = int(token)
                 tokens = tokens[:-2]
-            elif token.upper() in ROMAN_MAP:
-                part_hint = ROMAN_MAP[token.upper()]
-                tokens = tokens[:-2]
+            else:
+                try:
+                    part_hint = roman.fromRoman(token.upper())
+                    tokens = tokens[:-2]
+                except roman.InvalidRomanNumeralError:
+                    pass
     title = " ".join(tokens).strip()
     if len(title) < 2:
         raise ValueError
     return title, year, part_hint
 
 
+# cachetools сам очищает истёкшие записи
 def _cleanup_expired() -> None:
-    now = time.time
-    for key, value in list(_pending.items()):
-        if value["expires_at"] <= now():
-            _pending.pop(key, None)
+    pass
 
 
 async def _timeout_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -402,14 +392,14 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             "user_year": user_year,
             "options": {c.tmdb_id: c for c in options},
             "top1_tmdb_id": top1.tmdb_id,
-            "expires_at": time.time() + PENDING_TTL,
+            "expires_at": time.time() + config.ADD_PENDING_TTL,
             "lang": lang,
             "confirm_year": reason == "no_exact_year",
         }
         if context.job_queue:
             context.job_queue.run_once(
                 _timeout_job,
-                PENDING_TTL,
+                config.ADD_PENDING_TTL,
                 data={"key": key},
             )
         else:

@@ -3,10 +3,10 @@ import logging
 import time
 from telegram.ext import JobQueue, ContextTypes
 
-from .config import config
-from . import db
+from src.core.config import config
+from src.core import db
 
-_DEBOUNCE_SECONDS = 3
+_DEBOUNCE_SECONDS = config.EXPORT_DEBOUNCE_SECONDS  # задержка перед экспортом, сек
 _JOB_NAME = "export_full_json"
 _last_warn = 0
 
@@ -26,7 +26,7 @@ async def _export_full_json_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     global _last_warn
     if not config.MEGA_URL:
         now = time.time()
-        if now - _last_warn > 600:
+        if now - _last_warn > config.EXPORT_WARN_INTERVAL:
             logging.warning("mega export skipped: MEGA_URL not set")
             _last_warn = now
         return

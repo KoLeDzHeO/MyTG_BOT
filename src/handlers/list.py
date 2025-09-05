@@ -4,12 +4,12 @@ import uuid
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from src import db
-from src.config import config
-from src.i18n import t
-from src.utils.text_utils import mask
+from src.core import db
+from src.core.config import config
+from src.core.i18n import t
+from src.utils.text import mask
 from src.utils.ids import to_short_id
-from src.movies.constants import icon
+from src.domain.movies.constants import icon
 
 TELEGRAM_LIMIT = 4000
 

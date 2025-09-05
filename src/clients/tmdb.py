@@ -6,7 +6,7 @@ from typing import Optional, List
 
 import httpx
 
-from .config import config
+from src.core.config import config
 
 
 class TMDbError(Exception):
