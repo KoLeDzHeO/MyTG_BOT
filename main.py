@@ -53,10 +53,9 @@ async def on_error(update, context):
             await context.bot.send_message(
                 update.effective_chat.id, f"⚠️ Ошибка (id={rid}). Попробуй ещё раз."
             )
-        log_chat_id = getattr(config, "LOG_CHAT_ID", None)
-        if log_chat_id:
+        if config.LOG_CHAT_ID:
             await context.bot.send_message(
-                log_chat_id, f"❌ Error {rid}: {mask(str(context.error))}"
+                config.LOG_CHAT_ID, f"❌ Error {rid}: {mask(str(context.error))}"
             )
     except Exception:
         pass
