@@ -44,9 +44,17 @@ def _is_mention_addressed(raw: str, bot_username: str | None) -> tuple[bool, str
 
 
 def _model_and_tokens(provider: str) -> tuple[str, int]:
-    if provider == "openai":
-        return config.MODEL_DDOT, config.MAX_TOKENS_DDOT
-    return config.MODEL_GROQ, config.MAX_TOKENS_GROQ
+    p = (provider or "").lower()
+    # OpenAI
+    if p in {"openai", "gpt"}:
+        return config.MODEL_OPENAI, config.MAX_TOKENS_OPENAI
+    # Groq и "ddot"-персона используют одну и ту же конфигурацию Groq
+    if p in {"groq", "ddot"}:
+        return config.MODEL_GROQ, config.MAX_TOKENS_GROQ
+    # Фоллбек на провайдера по умолчанию
+    if (config.DEFAULT_PROVIDER or "").lower() == "groq":
+        return config.MODEL_GROQ, config.MAX_TOKENS_GROQ
+    return config.MODEL_OPENAI, config.MAX_TOKENS_OPENAI
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
