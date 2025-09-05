@@ -5,7 +5,7 @@ import os
 import requests
 from openai import OpenAI
 
-from src.utils.text_utils import mask
+from src.utils.text import mask
 
 _client: OpenAI | None = None
 _client_token: str | None = None

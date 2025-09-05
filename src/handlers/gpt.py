@@ -8,10 +8,10 @@ from telegram.constants import ChatAction, ChatType
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
-from src.config import config
-from src.gpt_client import ask_groq, ask_openai
+from src.core.config import config
+from src.clients.gpt import ask_groq, ask_openai
 from src.utils.format import as_html
-from src.utils.text_utils import chunk_text
+from src.utils.text import chunk_text
 
 
 _dialogs: dict[int, list[tuple[str, str]]] = {}

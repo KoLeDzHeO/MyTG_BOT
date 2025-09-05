@@ -1,8 +1,8 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from src.config import config
-from src.i18n import t
+from src.core.config import config
+from src.core.i18n import t
 
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

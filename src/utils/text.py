@@ -1,8 +1,10 @@
-from src.config import config
+from textwrap import wrap
+from src.core.config import config
 
 
 def chunk_text(text: str, size: int) -> list[str]:
-    return [text[i : i + size] for i in range(0, len(text), size)]
+    # используем встроенный textwrap
+    return wrap(text, size)
 
 
 def mask(text: str) -> str:

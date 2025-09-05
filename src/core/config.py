@@ -65,5 +65,12 @@ class Config:
     # --- Параметры бота фильмов ---
     LIST_TTL_SECONDS: int = _get_int("LIST_TTL_SECONDS", 300)  # авто-удаление сообщений /list, сек
 
+    # --- Параметры команд ---
+    ADD_PENDING_TTL: int = _get_int("ADD_PENDING_TTL", 120)  # TTL выбора фильма, сек
+    ADD_YEAR_MIN: int = _get_int("ADD_YEAR_MIN", 1888)       # минимальный год релиза
+    ADD_YEAR_MAX: int = _get_int("ADD_YEAR_MAX", 2100)       # максимальный год релиза
+    EXPORT_DEBOUNCE_SECONDS: int = _get_int("EXPORT_DEBOUNCE_SECONDS", 3)   # задержка экспорта, сек
+    EXPORT_WARN_INTERVAL: int = _get_int("EXPORT_WARN_INTERVAL", 600)       # интервал предупреждений, сек
+
 
 config = Config()

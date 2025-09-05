@@ -5,7 +5,7 @@ from typing import Optional
 import asyncpg
 
 from .config import config
-from .movies.constants import STATUS
+from src.domain.movies.constants import STATUS
 
 
 class DuplicateTmdbError(Exception):
