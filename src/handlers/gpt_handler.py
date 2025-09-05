@@ -46,7 +46,7 @@ def _is_mention_addressed(raw: str, bot_username: str | None) -> tuple[bool, str
 def _model_and_tokens(provider: str) -> tuple[str, int]:
     if provider == "openai":
         return config.MODEL_DDOT, config.MAX_TOKENS_DDOT
-    return config.GROQ_MODEL, config.MAX_TOKENS_GROQ
+    return config.MODEL_GROQ, config.MAX_TOKENS_GROQ
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
