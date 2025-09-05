@@ -117,41 +117,6 @@ async def fetch_all_movies_for_export() -> list[dict]:
     return [dict(r) for r in rows]
 
 
-async def find_movies_by_id_prefix(prefix: str, limit: int = 5) -> list[dict]:
-    """Find movies by id prefix excluding deleted ones."""
-    assert pool is not None
-    rows = await pool.fetch(
-        """
-        SELECT id, title, status
-          FROM movies
-         WHERE status != $1 AND id LIKE $2
-         ORDER BY created_at DESC
-         LIMIT $3
-        """,
-        STATUS["DELETED"],
-        prefix + "%",
-        limit,
-    )
-    return [dict(r) for r in rows]
-
-
-async def mark_movie_watched(movie_id: str) -> dict:
-    """Mark movie as watched and return updated row."""
-    assert pool is not None
-    row = await pool.fetchrow(
-        """
-        UPDATE movies
-           SET status=$1, watched_at=NOW()
-         WHERE id=$2
-     RETURNING id, title, status
-        """,
-        STATUS["WATCHED"],
-        movie_id,
-    )
-    assert row is not None
-    return dict(row)
-
-
 async def _create_indexes() -> None:
     assert pool is not None
     await pool.execute(
@@ -164,3 +129,43 @@ async def _create_indexes() -> None:
         "CREATE INDEX IF NOT EXISTS idx_movies_status_deleted_at ON movies (status, deleted_at DESC)"
     )
     logging.info("db indexes ok")
+
+
+# ниже — новые хелперы для команды /done
+
+
+async def find_movies_by_id_prefix(prefix: str, limit: int = 5) -> list[dict]:
+    """
+    Возвращает список фильмов, ID которых начинается с `prefix`.
+    Исключает удалённые записи. Новые — первыми.
+    """
+    assert pool is not None
+    prefix = (prefix or "").lower()
+    sql = """
+        SELECT id, title, status, watched_at
+        FROM movies
+        WHERE id LIKE $1 || '%' AND status != $2
+        ORDER BY created_at DESC
+        LIMIT $3
+    """
+    rows = await pool.fetch(sql, prefix, STATUS["DELETED"], limit)
+    return [dict(r) for r in rows]
+
+
+async def mark_movie_watched(movie_id: str) -> dict:
+    """
+    Устанавливает статус «watched» и время просмотра (если не было).
+    Возвращает обновлённую запись.
+    """
+    assert pool is not None
+    sql = """
+        UPDATE movies
+        SET status = $2,
+            watched_at = COALESCE(watched_at, NOW())
+        WHERE id = $1 AND status != $3
+        RETURNING id, title, status, watched_at
+    """
+    row = await pool.fetchrow(sql, movie_id, STATUS["WATCHED"], STATUS["DELETED"])
+    if not row:
+        raise ValueError("Movie not found or already deleted")
+    return dict(row)
