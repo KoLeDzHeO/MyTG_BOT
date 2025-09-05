@@ -2,49 +2,68 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Optional
 
 
 def _get_bool(name: str, default: bool = False) -> bool:
-    v = os.getenv(name)
-    if v is None:
+    """Считывает булеву переменную окружения."""
+    value = os.getenv(name)
+    if value is None:
         return default
-    return v.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def _get_int(name: str, default: int) -> int:
+    """Считывает целочисленную переменную окружения."""
     try:
         return int(os.getenv(name, str(default)))
-    except Exception:
+    except (TypeError, ValueError):
         return default
 
 
 @dataclass
 class Config:
-    # 🔐 Токен Telegram-бота (обязательно). Меняется в переменных окружения: TELEGRAM_TOKEN
-    TELEGRAM_TOKEN: str = os.getenv("TELEGRAM_TOKEN", "")
+    # --- Ключи и токены ---
+    TELEGRAM_TOKEN: str = os.getenv("TELEGRAM_TOKEN", "")  # токен бота (обязательно для запуска)
+    TMDB_KEY: str = os.getenv("TMDB_KEY", "")  # ключ TMDb для поиска фильмов
+    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY") or None  # ключ OpenAI (для режимов диалога)
+    GROQ_API_KEY: Optional[str] = os.getenv("GROQ_API_KEY") or None  # ключ Groq (для режимов диалога)
 
-    # 🔑 Ключ TMDb API. Переменная окружения: TMDB_KEY
-    TMDB_KEY: str = os.getenv("TMDB_KEY", "")
+    # --- Провайдеры и модели диалога ---
+    USE_GROQ: bool = _get_bool("USE_GROQ", False)  # если true — использовать Groq как провайдер диалога по умолчанию
+    DEFAULT_PROVIDER: str = os.getenv("DEFAULT_PROVIDER", "openai")  # "groq" или "openai" — провайдер по умолчанию
+    MODEL_OPENAI: str = os.getenv("MODEL_OPENAI", "gpt-4o")  # модель OpenAI по умолчанию (например, "gpt-4o")
+    MODEL_GROQ: str = os.getenv("MODEL_GROQ", "llama-3.3-70b-versatile")  # модель Groq по умолчанию
+    MAX_TOKENS_OPENAI: int = _get_int("MAX_TOKENS_OPENAI", 600)  # лимит токенов для OpenAI-ответа
+    MAX_TOKENS_GROQ: int = _get_int("MAX_TOKENS_GROQ", 400)  # лимит токенов для Groq-ответа
+    MAX_PROMPT_CHARS: int = _get_int("MAX_PROMPT_CHARS", 2000)  # макс. длина входного текста пользователя
+    MAX_REPLY_CHARS: int = _get_int("MAX_REPLY_CHARS", 3500)  # макс. длина ответа, символов
+    DIALOG_HISTORY_LEN: int = _get_int("DIALOG_HISTORY_LEN", 5)  # сколько последних сообщений хранить в истории
 
-    # 🛢️ URL подключения к базе (Postgres). ENV: DATABASE_URL
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    # --- Вебхук/поллинг ---
+    USE_WEBHOOK: bool = _get_bool("USE_WEBHOOK", False)  # режим вебхука: true — вебхук, false — polling
+    WEBHOOK_URL: Optional[str] = os.getenv("WEBHOOK_URL") or None  # публичный URL вебхука (если включён)
+    WEBHOOK_SECRET: Optional[str] = os.getenv("WEBHOOK_SECRET") or None  # секрет для проверок вебхука (если нужен)
+    PORT: int = _get_int("PORT", 8080)  # порт для вебхука/сервера
 
-    # 🌐 Порядок языков по умолчанию (первый — основной). Меняй список при необходимости
-    LANG_FALLBACKS: List[str] = field(default_factory=lambda: ["ru", "en"])
+    # --- База данных и архив ---
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")  # строка подключения к Postgres (может быть пустой локально)
+    MEGA_URL: Optional[str] = os.getenv("MEGA_URL") or None  # ссылка на архив (опционально)
 
-    # ✉️ Требовать префикс перед командами в чатах (true/false). ENV: REQUIRE_PREFIX
-    REQUIRE_PREFIX: bool = _get_bool("REQUIRE_PREFIX", False)
+    # --- Локализация и логи ---
+    LANG_FALLBACKS: list[str] = field(
+        default_factory=lambda: [s for s in os.getenv("LANG_FALLBACKS", "ru,en").split(",") if s]
+    )  # порядок языков по умолчанию, первый — основной
+    LOG_FORMAT: str = os.getenv("LOG_FORMAT", "text")  # "text" или "json" (по умолчанию "text")
+    LOG_CHAT_ID: Optional[int] = (
+        _get_int("LOG_CHAT_ID", 0) if os.getenv("LOG_CHAT_ID") is not None else None
+    )  # чат для ошибок/логов (если задан)
 
-    # 🧾 Формат логов: "text" или "json". ENV: LOG_FORMAT
-    LOG_FORMAT: str = os.getenv("LOG_FORMAT", "text")
+    # --- Поведение команд ---
+    REQUIRE_PREFIX: bool = _get_bool("REQUIRE_PREFIX", False)  # требовать префикс для обычных сообщений
 
-    # 📦 Ссылка на полный архив (например, MEGA). ENV: MEGA_URL; оставь пустым, если не используешь
-    MEGA_URL: Optional[str] = os.getenv("MEGA_URL") or None
-
-    # 🕒 Время авто-удаления сообщений /list (в секундах). ENV: LIST_TTL_SECONDS; по умолчанию 300 (5 минут)
-    LIST_TTL_SECONDS: int = _get_int("LIST_TTL_SECONDS", 300)
+    # --- Параметры бота фильмов ---
+    LIST_TTL_SECONDS: int = _get_int("LIST_TTL_SECONDS", 300)  # авто-удаление сообщений /list, сек
 
 
 config = Config()
-
