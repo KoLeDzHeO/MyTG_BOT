@@ -28,21 +28,6 @@ PENDING_TTL = 120
 _pending: dict[tuple[int, int, int], dict] = {}
 
 
-async def _delete_message_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    data = context.job.data
-    try:
-        await context.bot.delete_message(data["chat_id"], data["message_id"])
-    except Exception:
-        pass
-
-
-def _schedule_auto_delete(job_queue, chat_id: int, message_id: int) -> None:
-    if job_queue and config.CLEANUP_NOTICE_SECONDS > 0:
-        job_queue.run_once(
-            _delete_message_job,
-            config.CLEANUP_NOTICE_SECONDS,
-            data={"chat_id": chat_id, "message_id": message_id},
-        )
 
 PART_KEYWORDS = {
     "part",
@@ -165,26 +150,23 @@ async def _timeout_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id, _, msg_id = key
     lang = pending["lang"]
     query = pending["query"]
-    if config.CLEANUP_ON_TIMEOUT:
+    try:
+        await context.bot.delete_message(chat_id, msg_id)
+    except Exception:
+        logging.warning("/add cleanup delete_denied msg_id=%s", msg_id)
         try:
-            await context.bot.delete_message(chat_id, msg_id)
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=msg_id,
+                text=t("timeout", lang=lang, query=query),
+                reply_markup=None,
+            )
         except Exception:
-            logging.warning("/add cleanup delete_denied msg_id=%s", msg_id)
-            try:
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=msg_id,
-                    text=t("timeout", lang=lang, query=query),
-                    reply_markup=None,
-                )
-            except Exception:
-                logging.warning("/add cleanup edit_failed msg_id=%s", msg_id)
-    if config.CLEANUP_NOTICE_SECONDS > 0:
-        notice = await context.bot.send_message(
-            chat_id,
-            t("timeout", lang=lang, query=query),
-        )
-        _schedule_auto_delete(context.job_queue, chat_id, notice.message_id)
+            logging.warning("/add cleanup edit_failed msg_id=%s", msg_id)
+    await context.bot.send_message(
+        chat_id,
+        t("timeout", lang=lang, query=query),
+    )
     logging.info("/add cleanup reason=timeout msg_id=%s", msg_id)
 
 
@@ -226,11 +208,7 @@ async def add_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                         )
                     except Exception:
                         logging.warning("/add cleanup edit_failed msg_id=%s", msg_id)
-                if config.CLEANUP_NOTICE_SECONDS > 0:
-                    notice = await update.message.reply_text(t("old_cancelled", lang=lang))
-                    _schedule_auto_delete(
-                        context.job_queue, notice.chat_id, notice.message_id
-                    )
+                await update.message.reply_text(t("old_cancelled", lang=lang))
                 break
 
         try:

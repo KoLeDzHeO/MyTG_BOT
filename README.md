@@ -17,10 +17,10 @@
 | `WEBHOOK_URL` | URL вебхука (опц.) |
 | `WEBHOOK_SECRET` | секрет вебхука (опц.) |
 | `PORT` | порт вебсервера |
-| `MODEL_DDOT` | модель OpenAI |
-| `GROQ_MODEL` | модель Groq |
+| `MODEL_OPENAI` | модель OpenAI |
+| `MODEL_GROQ` | модель Groq |
+| `MAX_TOKENS_OPENAI` | предел токенов для OpenAI |
 | `MAX_TOKENS_GROQ` | предел токенов для Groq |
-| `MAX_TOKENS_DDOT` | предел токенов для OpenAI |
 | `MAX_PROMPT_CHARS` | максимальная длина входного сообщения |
 | `MAX_REPLY_CHARS` | максимальная длина ответа |
 | `REQUIRE_PREFIX` | требовать ли префикс `.`/`..` |

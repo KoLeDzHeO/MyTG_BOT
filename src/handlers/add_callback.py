@@ -12,7 +12,7 @@ from src.config import config
 from src.i18n import t
 from src.exporter import schedule_export
 from src.utils.ids import to_short_id
-from .add import _pending, NO_DATE, _schedule_auto_delete
+from .add import _pending, NO_DATE
 
 
 async def add_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -48,13 +48,9 @@ async def add_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 logging.warning(
                     "/add cleanup edit_failed msg_id=%s", query.message.message_id
                 )
-        if config.CLEANUP_NOTICE_SECONDS > 0:
-            notice = await context.bot.send_message(
-                chat_id, t("timeout", lang=lang, query=pending["query"])
-            )
-            _schedule_auto_delete(
-                context.job_queue, chat_id, notice.message_id
-            )
+        await context.bot.send_message(
+            chat_id, t("timeout", lang=lang, query=pending["query"])
+        )
         logging.info(
             "/add cleanup reason=timeout msg_id=%s", query.message.message_id
         )
@@ -83,11 +79,7 @@ async def add_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         logging.info(
             "/add cleanup reason=cancel msg_id=%s", query.message.message_id
         )
-        if config.CLEANUP_NOTICE_SECONDS > 0:
-            notice = await context.bot.send_message(chat_id, t("cancelled", lang=lang))
-            _schedule_auto_delete(
-                context.job_queue, chat_id, notice.message_id
-            )
+        await context.bot.send_message(chat_id, t("cancelled", lang=lang))
         await query.answer()
         return
 
@@ -222,3 +214,4 @@ async def add_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception:
         logging.exception("export schedule failed")
     await query.answer()
+    return
