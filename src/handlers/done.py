@@ -1,6 +1,5 @@
 import logging
 import uuid
-from typing import Optional
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -32,7 +31,8 @@ async def done_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     lang = config.LANG_FALLBACKS[0]
 
     try:
-        args = update.message.get_args() if update.message else ""
+        # В PTB v20+ аргументы команды приходят в context.args (list)
+        args = " ".join(context.args).strip() if getattr(context, "args", None) else ""
         if not args:
             await update.message.reply_text(
                 t("done_need_id", lang=lang)  # "Укажи ID фильма, например: /done 1a2b3c"
