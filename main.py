@@ -10,6 +10,7 @@ from src.handlers.add import add_handler
 from src.handlers.add_callback import add_callback_handler
 from src.handlers.list import list_handler
 from src.handlers.help import help_handler
+from src.handlers.done import done_handler
 from src.core import db
 from src.clients.tmdb import TMDbAuthError, TMDbError, tmdb_client
 from src.utils.text import mask
@@ -110,6 +111,7 @@ def main() -> None:
     app.add_handler(CommandHandler("id", id_handler))
     app.add_handler(CommandHandler("add", add_handler))
     app.add_handler(CommandHandler("list", list_handler))
+    app.add_handler(CommandHandler("done", done_handler))
     app.add_handler(CommandHandler("help", help_handler))
     app.add_handler(CallbackQueryHandler(add_callback_handler, pattern=r"^ADD_"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gpt_handler))

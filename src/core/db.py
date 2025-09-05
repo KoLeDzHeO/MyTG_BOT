@@ -117,6 +117,41 @@ async def fetch_all_movies_for_export() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+async def find_movies_by_id_prefix(prefix: str, limit: int = 5) -> list[dict]:
+    """Find movies by id prefix excluding deleted ones."""
+    assert pool is not None
+    rows = await pool.fetch(
+        """
+        SELECT id, title, status
+          FROM movies
+         WHERE status != $1 AND id LIKE $2
+         ORDER BY created_at DESC
+         LIMIT $3
+        """,
+        STATUS["DELETED"],
+        prefix + "%",
+        limit,
+    )
+    return [dict(r) for r in rows]
+
+
+async def mark_movie_watched(movie_id: str) -> dict:
+    """Mark movie as watched and return updated row."""
+    assert pool is not None
+    row = await pool.fetchrow(
+        """
+        UPDATE movies
+           SET status=$1, watched_at=NOW()
+         WHERE id=$2
+     RETURNING id, title, status
+        """,
+        STATUS["WATCHED"],
+        movie_id,
+    )
+    assert row is not None
+    return dict(row)
+
+
 async def _create_indexes() -> None:
     assert pool is not None
     await pool.execute(
