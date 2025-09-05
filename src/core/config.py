@@ -39,6 +39,15 @@ class Config:
     MAX_PROMPT_CHARS: int = _get_int("MAX_PROMPT_CHARS", 2000)  # макс. длина входного текста пользователя
     MAX_REPLY_CHARS: int = _get_int("MAX_REPLY_CHARS", 3500)  # макс. длина ответа, символов
     DIALOG_HISTORY_LEN: int = _get_int("DIALOG_HISTORY_LEN", 5)  # сколько последних сообщений хранить в истории
+    GPT_HTTP_TIMEOUT: int = _get_int(
+        "GPT_HTTP_TIMEOUT", 30
+    )  # таймаут HTTP-запросов к GPT, сек
+    GPT_MAX_RETRIES: int = _get_int(
+        "GPT_MAX_RETRIES", 3
+    )  # макс. попыток запроса к GPT
+    GPT_RETRY_BACKOFF_BASE: int = _get_int(
+        "GPT_RETRY_BACKOFF_BASE", 1
+    )  # базовая задержка между повторными запросами, сек
 
     # --- Вебхук/поллинг ---
     USE_WEBHOOK: bool = _get_bool("USE_WEBHOOK", False)  # режим вебхука: true — вебхук, false — polling
@@ -61,9 +70,15 @@ class Config:
 
     # --- Поведение команд ---
     REQUIRE_PREFIX: bool = _get_bool("REQUIRE_PREFIX", False)  # требовать префикс для обычных сообщений
+    TELEGRAM_MESSAGE_LIMIT: int = _get_int(
+        "TELEGRAM_MESSAGE_LIMIT", 4000
+    )  # макс. длина текста сообщения Telegram, символы
 
     # --- Параметры бота фильмов ---
     LIST_TTL_SECONDS: int = _get_int("LIST_TTL_SECONDS", 300)  # авто-удаление сообщений /list, сек
+    LIST_PAGE_SIZE: int = _get_int(
+        "LIST_PAGE_SIZE", 30
+    )  # сколько последних фильмов показывать командой /list
 
     # --- Параметры команд ---
     ADD_PENDING_TTL: int = _get_int("ADD_PENDING_TTL", 120)  # TTL выбора фильма, сек
