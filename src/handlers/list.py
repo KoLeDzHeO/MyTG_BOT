@@ -11,9 +11,8 @@ from src.utils.text import mask
 from src.utils.ids import to_short_id
 from src.domain.movies.constants import icon
 
-TELEGRAM_LIMIT = 4000
-
-# ⏱ TTL берём из конфига: config.LIST_TTL_SECONDS (секунды авто-удаления /list)
+TELEGRAM_LIMIT = config.TELEGRAM_MESSAGE_LIMIT
+LIST_PAGE_SIZE = config.LIST_PAGE_SIZE
 TTL_SECONDS = config.LIST_TTL_SECONDS
 
 
@@ -42,7 +41,7 @@ async def list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     chat_id = update.effective_chat.id
     try:
         lang = update.effective_user.language_code or config.LANG_FALLBACKS[0]
-        total, rows = await db.get_last_movies(30)
+        total, rows = await db.get_last_movies(LIST_PAGE_SIZE)
         if total == 0:
             msg = await update.message.reply_text(t("list_empty", lang=lang))
             logging.info("/list count_total=0 shown=0")
@@ -71,7 +70,7 @@ async def list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             m = await update.message.reply_text(ch)
             sent_ids.append(m.message_id)
 
-        if total > 30:
+        if total > LIST_PAGE_SIZE:
             if config.MEGA_URL:
                 m = await update.message.reply_text(
                     t("list_archive", lang=lang, url=config.MEGA_URL)
