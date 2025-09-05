@@ -40,6 +40,12 @@ MESSAGES = {
         "done_deleted": "Фильм {short_id} — “{title}” удалён.",
         "done_already": "Фильм {short_id} — “{title}” уже отмечен.",
         "done_ok": "✅ Просмотрено {short_id}\n🎬 “{title}”",
+        "del_need_id": "Укажи ID фильма, например: /del 1a2b3c",
+        "del_prefix_too_short": "Укажи хотя бы 4 символа ID.",
+        "del_not_found": "Фильм с таким ID не найден.",
+        "del_ambiguous": "Несколько совпадений: {sample}",
+        "del_already": "Фильм {short_id} — “{title}” уже удалён.",
+        "del_ok": "🗑 Удалено {short_id}\n🎬 “{title}”",
     },
     "en": {
         "series_prompt": "Looks like it's a series '{base_title}'. Choose a part:",
@@ -69,6 +75,12 @@ MESSAGES = {
         "done_deleted": "Movie {short_id} — '{title}' is deleted.",
         "done_already": "Movie {short_id} — '{title}' already marked as watched.",
         "done_ok": "✅ Marked as watched {short_id}\n🎬 '{title}'",
+        "del_need_id": "Specify movie ID, e.g., /del 1a2b3c",
+        "del_prefix_too_short": "Provide at least 4 characters of the ID.",
+        "del_not_found": "Movie not found for this ID.",
+        "del_ambiguous": "Multiple matches: {sample}",
+        "del_already": "Movie {short_id} — '{title}' already deleted.",
+        "del_ok": "🗑 Deleted {short_id}\n🎬 '{title}'",
     },
 }
 

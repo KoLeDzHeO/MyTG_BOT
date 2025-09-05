@@ -134,21 +134,33 @@ async def _create_indexes() -> None:
 # ниже — новые хелперы для команды /done
 
 
-async def find_movies_by_id_prefix(prefix: str, limit: int = 5) -> list[dict]:
+async def find_movies_by_id_prefix(
+    prefix: str, limit: int = 5, include_deleted: bool = False
+) -> list[dict]:
     """
     Возвращает список фильмов, ID которых начинается с `prefix`.
-    Исключает удалённые записи. Новые — первыми.
+    По умолчанию исключает удалённые записи. Новые — первыми.
     """
     assert pool is not None
     prefix = (prefix or "").lower()
-    sql = """
-        SELECT id, title, status, watched_at
-        FROM movies
-        WHERE id LIKE $1 || '%' AND status != $2
-        ORDER BY created_at DESC
-        LIMIT $3
-    """
-    rows = await pool.fetch(sql, prefix, STATUS["DELETED"], limit)
+    if include_deleted:
+        sql = """
+            SELECT id, title, status, watched_at
+            FROM movies
+            WHERE id LIKE $1 || '%'
+            ORDER BY created_at DESC
+            LIMIT $2
+        """
+        rows = await pool.fetch(sql, prefix, limit)
+    else:
+        sql = """
+            SELECT id, title, status, watched_at
+            FROM movies
+            WHERE id LIKE $1 || '%' AND status != $2
+            ORDER BY created_at DESC
+            LIMIT $3
+        """
+        rows = await pool.fetch(sql, prefix, STATUS["DELETED"], limit)
     return [dict(r) for r in rows]
 
 
@@ -168,4 +180,23 @@ async def mark_movie_watched(movie_id: str) -> dict:
     row = await pool.fetchrow(sql, movie_id, STATUS["WATCHED"], STATUS["DELETED"])
     if not row:
         raise ValueError("Movie not found or already deleted")
+    return dict(row)
+
+
+async def mark_movie_deleted(movie_id: str) -> dict:
+    """
+    Устанавливает статус «deleted» и время удаления (если не было).
+    Возвращает обновлённую запись.
+    """
+    assert pool is not None
+    sql = """
+        UPDATE movies
+        SET status = $2,
+            deleted_at = COALESCE(deleted_at, NOW())
+        WHERE id = $1
+        RETURNING id, title, status, deleted_at
+    """
+    row = await pool.fetchrow(sql, movie_id, STATUS["DELETED"])
+    if not row:
+        raise ValueError("Movie not found")
     return dict(row)
