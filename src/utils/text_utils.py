@@ -6,7 +6,10 @@ def chunk_text(text: str, size: int) -> list[str]:
 
 
 def mask(text: str) -> str:
-    for secret in (config.TELEGRAM_TOKEN, config.OPENAI_API_KEY):
+    for secret in (
+        config.TELEGRAM_TOKEN,
+        getattr(config, "OPENAI_API_KEY", None),
+    ):
         if secret:
             text = text.replace(secret, "***")
     return text
