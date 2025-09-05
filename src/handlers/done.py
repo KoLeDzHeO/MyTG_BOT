@@ -32,7 +32,7 @@ async def done_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     try:
         # В PTB v20+ аргументы команды приходят в context.args (list)
-        args = " ".join(context.args).strip() if getattr(context, "args", None) else ""
+        args = " ".join(context.args).strip()
         if not args:
             await update.message.reply_text(
                 t("done_need_id", lang=lang)  # "Укажи ID фильма, например: /done 1a2b3c"
