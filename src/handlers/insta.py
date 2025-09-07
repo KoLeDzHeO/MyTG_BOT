@@ -1,11 +1,12 @@
 import re
 
-from aiogram import Dispatcher, types, F
-from aiogram.filters import Command
+from telegram import Update
+from telegram.ext import ContextTypes
 
 from src.core import db
 
 # SQL-запрос для вставки или обновления привязки
+# ВНИМАНИЕ: updated_at НЕ трогать (оно обновляется триггером)
 UPSERT_LINK = """
 INSERT INTO tg_insta_links (chat_id, telegram_user_id, display_name, instagram_username)
 VALUES ($1, $2, $3, $4)
@@ -23,7 +24,7 @@ ORDER BY updated_at DESC, display_name ASC
 """
 
 # Регэкс для валидации имени Instagram
-INSTAGRAM_RE = re.compile(r"^[A-Za-z0-9._]{1,30}$")
+INSTAGRAM_RE = r'^[A-Za-z0-9._]{1,30}$'
 
 # Подсказка по использованию команды /link
 USAGE = (
@@ -34,32 +35,38 @@ USAGE = (
 
 def normalize_instagram(s: str) -> str | None:
     """Нормализует и проверяет логин Instagram."""
-    username = s.strip().lstrip("@").lower()
-    return username if INSTAGRAM_RE.fullmatch(username) else None
+    s = s.strip().lstrip("@").lower()
+    return s if re.fullmatch(INSTAGRAM_RE, s) else None
 
 
-async def link_handler(message: types.Message) -> None:
+async def link_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обрабатывает команду /link."""
+    message = update.message
+    if not message:
+        chat = update.effective_chat
+        if chat:
+            await chat.send_message(USAGE)
+        return
     if not message.text:
-        await message.answer(USAGE)
+        await message.reply_text(USAGE)
         return
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer(USAGE)
+        await message.reply_text(USAGE)
         return
     tokens = parts[1].split()
     if len(tokens) < 2:
-        await message.answer(USAGE)
+        await message.reply_text(USAGE)
         return
     raw_instagram = tokens[-1]
     name = " ".join(tokens[:-1]).strip()
     instagram = normalize_instagram(raw_instagram)
     if not name or instagram is None:
-        await message.answer(USAGE)
+        await message.reply_text(USAGE)
         return
     pool = db.pool
     if pool is None:
-        await message.answer("База данных недоступна, попробуйте позже.")
+        await message.reply_text("База данных недоступна, попробуйте позже.")
         return
     await pool.execute(
         UPSERT_LINK,
@@ -68,29 +75,27 @@ async def link_handler(message: types.Message) -> None:
         name,
         instagram,
     )
-    await message.answer(f"Готово! Привязал: {name} — @{instagram}")
+    await message.reply_text(f"Готово! Привязал: {name} — @{instagram}")
 
 
-async def insta_handler(message: types.Message) -> None:
+async def insta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обрабатывает команду /insta."""
+    message = update.message
+    chat = update.effective_chat
+    if message:
+        send = message.reply_text
+    elif chat:
+        send = chat.send_message
+    else:
+        return
     pool = db.pool
     if pool is None:
-        await message.answer("База данных недоступна, попробуйте позже.")
+        await send("База данных недоступна, попробуйте позже.")
         return
-    rows = await pool.fetch(SELECT_LINKS, message.chat.id)
+    rows = await pool.fetch(SELECT_LINKS, chat.id if chat else message.chat.id)
     if not rows:
-        await message.answer(
-            "В этом чате пока нет привязок. Используйте /link <имя> <insta>"
-        )
+        await send("В этом чате пока нет привязок. Используйте /link <имя> <insta>")
         return
-    lines = [
-        f"+ {r['display_name']} — @{r['instagram_username']}" for r in rows
-    ]
+    lines = [f"+ {r['display_name']} — @{r['instagram_username']}" for r in rows]
     text = "Привязанные Instagram:\n" + "\n".join(lines)
-    await message.answer(text)
-
-
-def register(dp: Dispatcher) -> None:
-    """Регистрирует хендлеры в диспетчере."""
-    dp.message.register(link_handler, F.text.regexp(r"^/link(?:\s|$)"))
-    dp.message.register(insta_handler, Command("insta"))
+    await send(text)
