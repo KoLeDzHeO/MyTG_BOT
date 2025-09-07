@@ -11,8 +11,7 @@ INSERT INTO tg_insta_links (chat_id, telegram_user_id, display_name, instagram_u
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (chat_id, telegram_user_id) DO UPDATE
 SET display_name = EXCLUDED.display_name,
-    instagram_username = EXCLUDED.instagram_username,
-    updated_at = NOW()
+    instagram_username = EXCLUDED.instagram_username
 """
 
 # SQL-запрос для получения всех привязок чата
