@@ -1,6 +1,6 @@
 import re
 
-from aiogram import Dispatcher, types
+from aiogram import Dispatcher, types, F
 from aiogram.filters import Command
 
 from src.core import db
@@ -40,6 +40,9 @@ def normalize_instagram(s: str) -> str | None:
 
 async def link_handler(message: types.Message) -> None:
     """Обрабатывает команду /link."""
+    if not message.text:
+        await message.answer(USAGE)
+        return
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
         await message.answer(USAGE)
@@ -89,5 +92,5 @@ async def insta_handler(message: types.Message) -> None:
 
 def register(dp: Dispatcher) -> None:
     """Регистрирует хендлеры в диспетчере."""
-    dp.message.register(link_handler, Command("link"))
+    dp.message.register(link_handler, F.text.regexp(r"^/link(?:\s|$)"))
     dp.message.register(insta_handler, Command("insta"))
