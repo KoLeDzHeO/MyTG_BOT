@@ -41,7 +41,7 @@ async def insta_unfurl_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     try:
         with open(path, "rb") as fh:
-            await message.reply_video(fh, supports_streaming=True)
+            await context.bot.send_video(chat_id=message.chat_id, video=fh, supports_streaming=True)
     finally:
         try:
             os.remove(path)
