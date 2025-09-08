@@ -13,6 +13,7 @@ from src.handlers.list import list_handler
 from src.handlers.help import help_handler
 from src.handlers.done import done_handler
 from src.handlers.insta import link_handler, insta_handler
+from src.handlers.insta_unfurl import insta_unfurl_handler
 from src.core import db
 del_handler = import_module("src.handlers.del").del_handler
 from src.clients.tmdb import TMDbAuthError, TMDbError, tmdb_client
@@ -120,6 +121,7 @@ def main() -> None:
     app.add_handler(CommandHandler("link", link_handler))
     app.add_handler(CommandHandler("insta", insta_handler))
     app.add_handler(CallbackQueryHandler(add_callback_handler, pattern=r"^ADD_"))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Entity("url"), insta_unfurl_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gpt_handler))
 
     app.add_error_handler(on_error)

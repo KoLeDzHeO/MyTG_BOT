@@ -87,5 +87,10 @@ class Config:
     EXPORT_DEBOUNCE_SECONDS: int = _get_int("EXPORT_DEBOUNCE_SECONDS", 3)   # задержка экспорта, сек
     EXPORT_WARN_INTERVAL: int = _get_int("EXPORT_WARN_INTERVAL", 600)       # интервал предупреждений, сек
 
+    # --- Instagram ---
+    INSTAGRAM_COOKIES_FILE: Optional[str] = os.getenv("INSTAGRAM_COOKIES_FILE") or None  # путь к cookie-файлу
+    INSTAGRAM_MAX_VIDEO_MB: int = _get_int("INSTAGRAM_MAX_VIDEO_MB", 45)  # макс. размер ролика, МБ
+    INSTAGRAM_ENABLE_UNFURL: bool = _get_bool("INSTAGRAM_ENABLE_UNFURL", True)  # разворачивать ссылки
+
 
 config = Config()
