@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -15,22 +16,35 @@ async def download_instagram_video(url: str) -> Optional[str]:
     """Скачивает видео Instagram и возвращает путь к mp4 или None."""
 
     def _download() -> Optional[str]:
-        tmpdir = tempfile.mkdtemp(prefix="ig_")
-        out = str(Path(tmpdir) / "%(id)s.%(ext)s")
+        # создаём временную директорию для выгрузки ролика
+        tmpdir = tempfile.mkdtemp(prefix=config.INSTAGRAM_TMP_PREFIX)
+        outtmpl = str(Path(tmpdir) / "%(id)s.%(ext)s")
         ydl_opts = {
+            # всегда получаем mp4
             "format": "mp4/bestvideo*+bestaudio/best",
-            "outtmpl": out,
-            "quiet": True,
-            "noplaylist": True,
+            "outtmpl": outtmpl,
+            "quiet": True,  # не засорять вывод
+            "noplaylist": True,  # одиночное видео
+            "cachedir": False,  # не использовать кэш
+            "nopart": True,  # без временных .part
+            "final_ext": "mp4",
+            "merge_output_format": "mp4",
+            "prefer_ffmpeg": True,
         }
         if config.INSTAGRAM_COOKIES_FILE:
             ydl_opts["cookiefile"] = config.INSTAGRAM_COOKIES_FILE
         try:
             with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
-                return ydl.prepare_filename(info)
-        except Exception:
-            logging.exception("insta download failed")
+                filename = Path(ydl.prepare_filename(info)).with_suffix(".mp4")
+                # возвращаем путь только если файл действительно создан
+                if filename.exists():
+                    return str(filename)
+                shutil.rmtree(tmpdir, ignore_errors=True)
+                return None
+        except Exception as exc:  # логируем лаконично и чистим директорию
+            logging.error("Instagram download error: %s", exc)
+            shutil.rmtree(tmpdir, ignore_errors=True)
             return None
 
     return await asyncio.to_thread(_download)
