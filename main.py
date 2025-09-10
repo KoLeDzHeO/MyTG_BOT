@@ -1,6 +1,7 @@
 import json
 import logging
 import uuid
+import tracemalloc
 from importlib import import_module
 
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
@@ -68,6 +69,8 @@ async def on_error(update, context):
 
 def main() -> None:
     _make_logger()
+    if config.MEM_DEBUG:
+        tracemalloc.start()
     async def on_startup(app):
         await db.init()
         try:

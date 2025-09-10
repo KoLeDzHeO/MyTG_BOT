@@ -67,6 +67,7 @@ class Config:
     LOG_CHAT_ID: Optional[int] = (
         _get_int("LOG_CHAT_ID", 0) if os.getenv("LOG_CHAT_ID") is not None else None
     )  # чат для ошибок/логов (если задан)
+    MEM_DEBUG: bool = _get_bool("MEM_DEBUG", False)  # диагностировать утечки памяти
 
     # --- Поведение команд ---
     REQUIRE_PREFIX: bool = _get_bool("REQUIRE_PREFIX", False)  # требовать префикс для обычных сообщений
