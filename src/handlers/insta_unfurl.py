@@ -1,7 +1,11 @@
 """Авторазворачивание ссылок Instagram."""
 
+import gc
+import logging
 import os
 import re
+import resource
+import tracemalloc
 
 from telegram import Update
 from telegram.constants import ChatAction
@@ -38,13 +42,46 @@ async def insta_unfurl_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await message.reply_text(
             f"⚠️ Видео слишком большое для отправки ботом (лимит: {config.INSTAGRAM_MAX_VIDEO_MB} МБ). Оставляю ссылку: {url}"
         )
+        # Важно: удалить файл, чтобы не копить мусор на диске
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        if config.MEM_DEBUG:
+            _log_mem_debug()
         return
     try:
         with open(path, "rb") as fh:
-            await context.bot.send_video(chat_id=message.chat_id, video=fh, supports_streaming=True)
+            await context.bot.send_video(
+                chat_id=message.chat_id, video=fh, supports_streaming=True
+            )
     finally:
         try:
             os.remove(path)
         except OSError:
             pass
+        if config.MEM_DEBUG:
+            # При включённом MEM_DEBUG выводим статистику по памяти
+            _log_mem_debug()
+
+
+def _log_mem_debug() -> None:
+    """Логирует статистику по памяти."""
+    collected = gc.collect()
+    current, peak = (
+        tracemalloc.get_traced_memory() if tracemalloc.is_tracing() else (0, 0)
+    )
+    rss_raw = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    # Linux: ru_maxrss в КБ, macOS: в байтах
+    import sys
+
+    factor = 1 if sys.platform == "darwin" else 1024
+    rss_mb = rss_raw / factor / 1024
+    logging.info(
+        "mem_debug: gc=%d current_bytes=%d peak_bytes=%d rss_mb=%.1f",
+        collected,
+        current,
+        peak,
+        rss_mb,
+    )
 
