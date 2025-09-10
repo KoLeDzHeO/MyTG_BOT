@@ -92,6 +92,7 @@ class Config:
     INSTAGRAM_COOKIES_FILE: Optional[str] = os.getenv("INSTAGRAM_COOKIES_FILE") or None  # путь к cookie-файлу
     INSTAGRAM_MAX_VIDEO_MB: int = _get_int("INSTAGRAM_MAX_VIDEO_MB", 45)  # макс. размер ролика, МБ
     INSTAGRAM_ENABLE_UNFURL: bool = _get_bool("INSTAGRAM_ENABLE_UNFURL", True)  # разворачивать ссылки
+    INSTAGRAM_TMP_PREFIX: str = os.getenv("INSTAGRAM_TMP_PREFIX", "igdl_")  # префикс временных директорий
 
 
 config = Config()

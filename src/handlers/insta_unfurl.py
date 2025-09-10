@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import resource
+import shutil
 import tracemalloc
 
 from telegram import Update
@@ -42,11 +43,8 @@ async def insta_unfurl_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await message.reply_text(
             f"⚠️ Видео слишком большое для отправки ботом (лимит: {config.INSTAGRAM_MAX_VIDEO_MB} МБ). Оставляю ссылку: {url}"
         )
-        # Важно: удалить файл, чтобы не копить мусор на диске
-        try:
-            os.remove(path)
-        except OSError:
-            pass
+        # Удаляем файл и временную директорию, чтобы не копить мусор
+        _cleanup_tmp(path)
         if config.MEM_DEBUG:
             _log_mem_debug()
         return
@@ -56,13 +54,21 @@ async def insta_unfurl_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 chat_id=message.chat_id, video=fh, supports_streaming=True
             )
     finally:
-        try:
-            os.remove(path)
-        except OSError:
-            pass
+        _cleanup_tmp(path)
         if config.MEM_DEBUG:
             # При включённом MEM_DEBUG выводим статистику по памяти
             _log_mem_debug()
+
+
+def _cleanup_tmp(path: str) -> None:
+    """Удаляет файл и его временную директорию при совпадении префикса."""
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+    tmpdir = os.path.dirname(path)
+    if os.path.basename(tmpdir).startswith(config.INSTAGRAM_TMP_PREFIX):
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def _log_mem_debug() -> None:
